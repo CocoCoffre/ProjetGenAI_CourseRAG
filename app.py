@@ -118,8 +118,10 @@ def main():
     # Affichage de l'historique
     for msg in st.session_state.messages:
         # LangGraph utilise des formats de messages spécifiques, on adapte l'affichage
-        role = "user" if msg.type == "human" else "assistant"
-        st.chat_message(role).write(msg.content)
+        if msg.type == "human":
+            st.chat_message("user").write(msg.content)
+        elif msg.type == "ai" and msg.content: # On n'affiche que les réponses AI textuelles
+            st.chat_message("assistant").write(msg.content)
 
     # Chat
     user_input = st.chat_input("Votre question...")
@@ -127,6 +129,7 @@ def main():
     if user_input:
         # 1. Affichage User
         st.chat_message("user").write(user_input)
+        st.session_state.messages.append(HumanMessage(content=user_input))
         
         groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
@@ -144,7 +147,12 @@ def main():
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
-        system_prompt = "Tu es un assistant étudiant. Si tu ne peux pas répondre en utilisant un tool, dis: 'je ne peux pas répondre cela dépasse mes compétences'. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
+        system_prompt = (
+            "Tu es un assistant étudiant."
+            "Si tu ne peux pas répondre en utilisant un tool, dis: 'je ne peux pas répondre cela dépasse mes compétences'."
+            "Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
+        )
+        
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
 
         # 4. Exécution (Syntaxe LangGraph)
@@ -154,15 +162,22 @@ def main():
         with st.chat_message("assistant"):
             with st.spinner("Réflexion..."):
                 try:
-                    # Invoke renvoie le nouvel état final
+                    # 2. INVOQUER L'AGENT AVEC L'HISTORIQUE COMPLET
+                    # LangGraph va gérer les appels d'outils INTERNES ici
+                    inputs = {"messages": st.session_state.messages}
                     response = agent_graph.invoke(inputs)
                     
-                    # La réponse finale est le dernier message de l'agent
-                    final_message = response["messages"][-1]
-                    st.write(final_message.content)
+                    # 3. RECUPERER LA REPONSE FINALE
+                    # response["messages"] contient tout l'historique mis à jour (User + ToolCalls + ToolOutputs + AI Final)
+                    full_history = response["messages"]
+                    final_answer = full_history[-1].content
                     
-                    # Mise à jour de l'historique (On garde tout l'historique renvoyé par le graph)
-                    st.session_state.messages = response["messages"]
+                    # 4. AFFICHER LA REPONSE
+                    st.write(final_answer)
+                    
+                    # 5. METTRE A JOUR LA MEMOIRE DE SESSION
+                    # On remplace l'historique par celui retourné par l'agent (qui contient les traces des outils)
+                    st.session_state.messages = full_history
                     
                 except Exception as e:
                     st.error(f"Erreur: {e}")
