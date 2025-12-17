@@ -65,8 +65,8 @@ def search_course(query: str) -> str:
 @tool
 def search_wikipedia(query: str) -> str:
     """
-    Perform a search on Wikipedia when user tell you to give him a definition.
-    The term 'definition' need to be in the user request to use this tool.
+    Perform a search on Wikipedia when user ask you explicitly for a definition.
+    Use this tool only if 'definition' is present in user's request.
     1. DO NOT COPY the raw text.
     2. Summarize the answer in 3-4 clear sentences.
     3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
