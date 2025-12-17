@@ -1,6 +1,8 @@
 import streamlit as st
-from pypdf import PdfReader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+import os
+import tempfile
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
@@ -10,7 +12,7 @@ from langchain.chains import ConversationalRetrievalChain
 # --- Configuration de la page ---
 st.set_page_config(page_title="Assistant Étudiant AI", page_icon="🎓")
 
-# --- CSS personnalisé pour améliorer l'interface (optionnel) ---
+# --- CSS pour le chat (Look & Feel) ---
 st.markdown("""
 <style>
 .chat-message {
@@ -25,123 +27,148 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- Fonctions Utilitaires ---
+# --- Fonctions Backend ---
 
-def get_pdf_text(pdf_docs):
-    """Extrait le texte de plusieurs fichiers PDF."""
-    text = ""
-    for pdf in pdf_docs:
-        pdf_reader = PdfReader(pdf)
-        for page in pdf_reader.pages:
-            text += page.extract_text()
-    return text
+def process_uploaded_files(uploaded_files):
+    """
+    Gère le chargement des fichiers :
+    1. Sauvegarde temporaire sur le disque (requis par PyPDFLoader).
+    2. Chargement avec LangChain (récupère texte + métadonnées page/source).
+    3. Nettoyage des fichiers temporaires.
+    """
+    documents = []
+    
+    for uploaded_file in uploaded_files:
+        # Création d'un fichier temporaire
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+                tmp_file.write(uploaded_file.getvalue())
+                tmp_file_path = tmp_file.name
 
-def get_text_chunks(text):
-    """Divise le texte en morceaux (chunks) gérables."""
+            # Chargement via PyPDFLoader
+            loader = PyPDFLoader(tmp_file_path)
+            loaded_docs = loader.load()
+            
+            # Ajout du nom du fichier d'origine aux métadonnées (plus propre que le chemin temp)
+            for doc in loaded_docs:
+                doc.metadata['source'] = uploaded_file.name
+                documents.extend([doc])
+                
+        except Exception as e:
+            st.error(f"Erreur lors du traitement de {uploaded_file.name}: {e}")
+        finally:
+            # Suppression du fichier temporaire pour ne pas saturer le serveur
+            if os.path.exists(tmp_file_path):
+                os.remove(tmp_file_path)
+            
+    return documents
+
+def get_vectorstore(documents):
+    """Divise les documents et crée l'index vectoriel FAISS."""
+    # Découpage intelligent (garde le contexte des phrases)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len
+        chunk_overlap=200
     )
-    chunks = text_splitter.split_text(text)
-    return chunks
-
-def get_vectorstore(text_chunks):
-    """Crée la base de données vectorielle (FAISS) à partir des chunks."""
-    # Utilisation d'un modèle léger et gratuit de HuggingFace
+    splits = text_splitter.split_documents(documents)
+    
+    # Création des embeddings (HuggingFace local sur CPU)
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    vectorstore = FAISS.from_texts(texts=text_chunks, embedding=embeddings)
+    
+    # Création de la base vectorielle
+    vectorstore = FAISS.from_documents(documents=splits, embedding=embeddings)
     return vectorstore
 
 def get_conversation_chain(vectorstore):
-    """Initialise la chaîne de conversation avec Groq."""
+    """Initialise le LLM Groq et la mémoire de conversation."""
     
-    # Récupération de la clé API depuis les secrets Streamlit
+    # Récupération sécurisée de la clé API
     try:
         groq_api_key = st.secrets["GROQ_API_KEY"]
     except Exception:
-        st.error("La clé API Groq n'est pas configurée dans les secrets.")
-        return None
+        st.error("🚨 Clé API Groq manquante ! Ajoutez-la dans les secrets Streamlit.")
+        st.stop()
 
-    # Initialisation du LLM Groq (Llama 3 est très performant)
+    # Modèle Llama 3 via Groq (Rapide et performant)
     llm = ChatGroq(
         groq_api_key=groq_api_key, 
         model_name="llama3-70b-8192",
-        temperature=0.5
+        temperature=0.3
     )
 
     memory = ConversationBufferMemory(
         memory_key='chat_history', 
-        return_messages=True
+        return_messages=True,
+        output_key='answer' # Important pour ConversationalRetrievalChain
     )
 
     conversation_chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
         retriever=vectorstore.as_retriever(),
-        memory=memory
+        memory=memory,
+        return_source_documents=True # Permet de savoir d'où vient l'info (optionnel)
     )
     return conversation_chain
 
 def handle_userinput(user_question):
-    """Gère l'interaction utilisateur et l'affichage du chat."""
+    """Gère l'interface de chat."""
     if st.session_state.conversation is None:
-        st.warning("Veuillez d'abord charger vos documents PDF.")
+        st.warning("Veuillez d'abord charger et analyser vos cours (PDF).")
         return
 
+    # Appel au RAG
     response = st.session_state.conversation({'question': user_question})
     st.session_state.chat_history = response['chat_history']
 
-    # Affichage de l'historique inversé (le plus récent en bas est géré par streamlit chat logic standard)
-    # Ici on affiche simplement l'échange
+    # Affichage de l'historique
     for i, message in enumerate(st.session_state.chat_history):
         if i % 2 == 0:
-            st.chat_message("user").write(message.content)
+            with st.chat_message("user"):
+                st.write(message.content)
         else:
-            st.chat_message("assistant").write(message.content)
+            with st.chat_message("assistant"):
+                st.write(message.content)
 
-# --- Interface Principale ---
+# --- Main Application ---
 
 def main():
-    st.header("🎓 Assistant Étudiant RAG (via Groq)")
+    st.header("🎓 Assistant Étudiant RAG (Llama 3 & Groq)")
 
-    # Initialisation des variables de session
+    # Initialisation Session State
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
 
-    # Zone de Chat
+    # Zone de Chat principale
     user_question = st.chat_input("Posez une question sur vos cours...")
     if user_question:
         handle_userinput(user_question)
 
-    # Sidebar pour le chargement des fichiers
+    # Sidebar (Menu de gauche)
     with st.sidebar:
-        st.subheader("Vos Cours (PDF)")
+        st.subheader("Vos Cours")
         pdf_docs = st.file_uploader(
-            "Chargez vos documents ici et cliquez sur 'Analyser'", 
+            "Chargez vos PDFs ici", 
             accept_multiple_files=True,
             type=['pdf']
         )
         
         if st.button("Analyser les documents"):
-            with st.spinner("Traitement en cours... (Lecture, Découpage, Indexation)"):
-                if not pdf_docs:
-                    st.error("Veuillez sélectionner au moins un fichier PDF.")
-                else:
-                    # 1. Extraction du texte
-                    raw_text = get_pdf_text(pdf_docs)
+            if not pdf_docs:
+                st.warning("Ajoutez au moins un PDF avant de lancer l'analyse.")
+            else:
+                with st.spinner("Traitement des PDFs en cours..."):
+                    # 1. Traitement des fichiers (Temp -> Loader)
+                    raw_docs = process_uploaded_files(pdf_docs)
                     
-                    # 2. Découpage en chunks
-                    text_chunks = get_text_chunks(raw_text)
+                    # 2. Création Vector Store
+                    vectorstore = get_vectorstore(raw_docs)
                     
-                    # 3. Création du Vector Store
-                    vectorstore = get_vectorstore(text_chunks)
-                    
-                    # 4. Création de la chaîne de conversation
+                    # 3. Initialisation Chaîne
                     st.session_state.conversation = get_conversation_chain(vectorstore)
                     
-                    st.success("Terminé ! Vous pouvez maintenant discuter avec vos cours.")
+                    st.success(f"Analyse terminée ! {len(raw_docs)} pages traitées.")
 
 if __name__ == '__main__':
     main()
