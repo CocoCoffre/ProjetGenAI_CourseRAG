@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain.tools import tool
 from langchain_groq import ChatGroq
 # C'est LA fonction dont parle ta doc (qui construit un graph):
-from langgraph.prebuilt import create_react_agent as create_agent 
+from langchain import create_agent 
 
 from langchain_community.retrievers import WikipediaRetriever
 
@@ -132,7 +132,7 @@ def main():
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
         system_prompt = "Tu es un assistant étudiant. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
-        agent_graph = create_agent(llm, tools=tools, system_prompt="Tu es un assistant étudiant. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia.")
+        agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
 
         # 4. Exécution (Syntaxe LangGraph)
         # On doit passer l'état actuel (les messages)
