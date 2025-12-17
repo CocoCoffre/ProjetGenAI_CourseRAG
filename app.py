@@ -3,11 +3,11 @@ import os
 import tempfile
 from dotenv import load_dotenv
 
-# --- Tes Imports Spécifiques (langchain-classic) ---
-from langchain_classic.chains.retrieval import create_retrieval_chain
-from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+# --- Nouveaux Imports pour l'Agent ---
+from langchain.tools.retriever import create_retriever_tool
+from langchain.agents import create_tool_calling_agent, AgentExecutor
 
-# --- Autres Imports nécessaires ---
+# --- Imports Standards ---
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -16,18 +16,15 @@ from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 
 # --- Config ---
-st.set_page_config(page_title="Projet RAG Étudiant", page_icon="🎓")
-
-# --- Fonctions Backend ---
+st.set_page_config(page_title="Agent Étudiant ReAct", page_icon="🤖")
 
 def process_documents(uploaded_files):
-    """Gère le chargement PDF via fichiers temporaires."""
+    """Charge et lit les PDF."""
     documents = []
     for file in uploaded_files:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             tmp_file.write(file.getvalue())
             tmp_path = tmp_file.name
-        
         try:
             loader = PyPDFLoader(tmp_path)
             docs = loader.load()
@@ -38,95 +35,105 @@ def process_documents(uploaded_files):
     return documents
 
 def build_vector_store(documents):
-    """Crée les embeddings et la base vectorielle."""
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
+    """Indexe les documents."""
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     splits = text_splitter.split_documents(documents)
-    
-    # Embeddings
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
     vectorstore = FAISS.from_documents(splits, embeddings)
     return vectorstore
 
-def get_rag_chain(vectorstore):
-    """Crée la chaîne RAG avec langchain-classic."""
-    
-    # Récupération API Key
+def get_agent_executor(vectorstore):
+    """
+    Crée l'agent ReAct capable d'utiliser le cours comme un outil.
+    """
     groq_api_key = st.secrets.get("GROQ_API_KEY")
     if not groq_api_key:
-        st.error("ERREUR : Clé GROQ_API_KEY manquante.")
+        st.error("Clé API manquante.")
         st.stop()
 
-    # LLM
+    # 1. Le LLM (Cerveau)
     llm = ChatGroq(
-        groq_api_key=groq_api_key,
-        model_name="llama-3.3-70b-versatile",
-        temperature=0.3
+        groq_api_key=groq_api_key, 
+        model_name="llama-3.3-70b-versatile", 
+        temperature=0
     )
 
-    # Prompt
-    prompt = ChatPromptTemplate.from_template("""
-    Réponds à la question en utilisant uniquement le contexte ci-dessous.
-    Si tu ne sais pas, dis-le.
-
-    <context>
-    {context}
-    </context>
-
-    Question: {input}
-    """)
-
-    # Utilisation des fonctions de langchain_classic
-    document_chain = create_stuff_documents_chain(llm, prompt)
+    # 2. Création de l'outil de recherche (Step 1)
     retriever = vectorstore.as_retriever()
-    retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    retriever_tool = create_retriever_tool(
+        retriever,
+        name="recherche_cours_pdf",
+        description="Utilise cet outil pour trouver des informations dans les documents de cours PDF fournis par l'utilisateur. Cherche toujours ici en premier si la question porte sur le cours."
+    )
     
-    return retrieval_chain
+    tools = [retriever_tool]
 
-# --- Interface ---
+    # 3. Le Prompt de l'Agent (Instruction système)
+    # On définit comment l'agent doit se comporter
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "Tu es un assistant étudiant intelligent. Tu as accès à des documents de cours. "
+                   "Utilise tes outils pour répondre aux questions. "
+                   "Si l'information est dans le cours, cite le contexte. "
+                   "Si la question est hors sujet (ex: météo), dis que tu ne peux répondre qu'au cours."),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}"), # IMPORTANT: Là où l'agent 'réfléchit'
+    ])
+
+    # 4. Construction de l'Agent (Step 2)
+    agent = create_tool_calling_agent(llm, tools, prompt)
+    
+    # 5. L'Exécuteur (Celui qui fait tourner la boucle)
+    agent_executor = AgentExecutor(
+        agent=agent, 
+        tools=tools, 
+        verbose=True # Affiche le raisonnement dans la console (logs)
+    )
+    
+    return agent_executor
 
 def main():
-    st.title("🎓 Assistant RAG Étudiant")
+    st.title("🤖 Agent Étudiant (Mode ReAct)")
+    st.markdown("Cet agent peut **décider** d'utiliser vos cours pour répondre.")
 
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
 
+    # Sidebar : Chargement
     with st.sidebar:
-        st.header("1. Vos Cours")
-        uploaded_files = st.file_uploader("Upload PDF", type="pdf", accept_multiple_files=True)
-        
-        if st.button("Traiter les documents"):
-            if uploaded_files:
-                with st.spinner("Analyse en cours..."):
-                    docs = process_documents(uploaded_files)
-                    if docs:
-                        st.session_state.vectorstore = build_vector_store(docs)
-                        st.success(f"Terminé ! {len(docs)} pages analysées.")
-                    else:
-                        st.warning("Aucun texte extrait.")
-            else:
-                st.warning("Ajoutez un fichier d'abord.")
+        st.header("Base de Connaissances")
+        files = st.file_uploader("Ajouter des cours (PDF)", type="pdf", accept_multiple_files=True)
+        if st.button("Analyser et Indexer") and files:
+            with st.spinner("Lecture et indexation..."):
+                docs = process_documents(files)
+                st.session_state.vectorstore = build_vector_store(docs)
+                st.success(f"{len(docs)} pages ingérées dans la mémoire.")
 
-    user_input = st.chat_input("Votre question...")
+    # Chat Interface
+    question = st.chat_input("Pose ta question à l'agent...")
+    
+    if question:
+        # Affichage message utilisateur
+        st.chat_message("user").write(question)
 
-    if user_input:
-        if st.session_state.vectorstore:
-            with st.chat_message("user"):
-                st.write(user_input)
-            
-            with st.chat_message("assistant"):
-                with st.spinner("Réflexion..."):
-                    try:
-                        chain = get_rag_chain(st.session_state.vectorstore)
-                        res = chain.invoke({"input": user_input})
-                        st.write(res["answer"])
-                    except Exception as e:
-                        st.error(f"Erreur : {e}")
+        if st.session_state.vectorstore is None:
+            st.warning("Attention : Aucun cours chargé. L'agent ne pourra compter que sur ses connaissances générales.")
+            # On pourrait empêcher l'exécution, mais un Agent peut aussi répondre sans outils !
+            # Pour l'exercice, on va quand même demander les docs
         else:
-            st.warning("Veuillez d'abord traiter les documents.")
+            with st.chat_message("assistant"):
+                with st.spinner("L'agent réfléchit et consulte ses outils..."):
+                    try:
+                        # Création de l'agent avec les outils liés au vectorstore actuel
+                        agent_executor = get_agent_executor(st.session_state.vectorstore)
+                        
+                        # Exécution
+                        response = agent_executor.invoke({"input": question})
+                        
+                        # Affichage réponse finale
+                        st.write(response["output"])
+                        
+                    except Exception as e:
+                        st.error(f"Erreur agent : {e}")
 
 if __name__ == "__main__":
     main()
