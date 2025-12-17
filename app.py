@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from langchain.tools import tool
 from langchain_groq import ChatGroq
 # C'est LA fonction dont parle ta doc (qui construit un graph):
-from langchain import create_agent 
+from langchain.agents import create_agent 
 
 from langchain_community.retrievers import WikipediaRetriever
 
