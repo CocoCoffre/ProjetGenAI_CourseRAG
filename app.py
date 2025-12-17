@@ -64,20 +64,27 @@ def search_course(query: str) -> str:
 @tool
 def search_wikipedia(query: str) -> str:
     """
-    Cherche des définitions ou des faits historiques sur Wikipedia.
-    Utilise cet outil pour les concepts généraux (ex: 'Qui est Victor Hugo ?', 'Définition de la mitose').
-    Utilise aussi si on te spécifie d'utiliser wikipedia
+    Effectue une recherche sur Wikipedia pour trouver des définitions, des faits historiques ou des concepts généraux.
+    
+    Args:
+        query: Le sujet exact ou le terme à rechercher (ex: "Vanishing gradient", "Victor Hugo").
     """
     try:
-        # On utilise exactement ton import
+        # Initialisation du retriever
         retriever = WikipediaRetriever() 
-        # On limite à 2 documents pour ne pas saturer le LLM
         retriever.top_k_results = 2
         
+        # Invocation
         docs = retriever.invoke(query)
+        
+        # Vérification si on a des résultats
+        if not docs:
+            return "Aucun résultat trouvé sur Wikipedia pour cette recherche."
+            
         return "\n\n".join([doc.page_content for doc in docs])
+        
     except Exception as e:
-        return f"Erreur Wikipedia : {e}"
+        return f"Erreur lors de la recherche Wikipedia : {e}"
         
 # --- 3. APPLICATION ---
 
