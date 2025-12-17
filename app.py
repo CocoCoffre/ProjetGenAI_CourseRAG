@@ -65,7 +65,7 @@ def search_course(query: str) -> str:
 @tool
 def search_wikipedia(query: str) -> str:
     """
-    Perform a search on Wikipedia to find definitions, historical facts, or general concepts.
+    Perform a search on Wikipedia when asked specifically about a definition.
     1. DO NOT COPY the raw text.
     2. Summarize the answer in 3-4 clear sentences.
     3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
