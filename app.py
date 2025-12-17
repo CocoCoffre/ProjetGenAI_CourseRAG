@@ -98,6 +98,8 @@ def main():
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
                 st.success("Prêt !")
+        st.markdown("---")
+        st.caption("Outils disponibles : Cours, Wikipedia")
 
     # Affichage de l'historique
     for msg in st.session_state.messages:
@@ -128,7 +130,8 @@ def main():
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
-        agent_graph = create_agent(llm, tools=tools)
+        system_prompt = "Tu es un assistant étudiant. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
+        agent_graph = create_agent(llm, tools=tools, state_modifier=system_prompt)
 
         # 4. Exécution (Syntaxe LangGraph)
         # On doit passer l'état actuel (les messages)
