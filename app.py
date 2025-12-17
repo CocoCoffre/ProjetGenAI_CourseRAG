@@ -9,6 +9,9 @@ from langchain_groq import ChatGroq
 # C'est LA fonction dont parle ta doc (qui construit un graph):
 from langgraph.prebuilt import create_react_agent as create_agent 
 
+from langchain_community.tools import WikipediaQueryRun
+from langchain_community.utilities import WikipediaAPIWrapper
+
 # --- Imports standards RAG ---
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
