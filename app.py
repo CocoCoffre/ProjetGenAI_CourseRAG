@@ -65,12 +65,12 @@ def search_course(query: str) -> str:
 @tool
 def search_wikipedia(query: str) -> str:
     """
-    Effectue une recherche sur Wikipedia pour trouver des définitions, des faits historiques ou des concepts généraux.
-    1. NE RECOPIE PAS le texte brut.
-    2. SYNTHÉTISE la réponse en 3-4 phrases claires.
-    3. NETTOIE les formules mathématiques (enlève les balises LaTeX comme 'displaystyle').
+    Perform a search on Wikipedia to find definitions, historical facts, or general concepts.
+    1. DO NOT COPY the raw text.
+    2. Summarize the answer in 3-4 clear sentences.
+    3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
     Args:
-        query: Le sujet exact ou le terme à rechercher au format JSON (ex: "Vanishing gradient", "Victor Hugo").
+        query: The exact subject or term to search for in JSON format (ex "Vanishing gradient", "Victor Hugo").
     """
     try:
         # Initialisation du retriever
@@ -149,9 +149,9 @@ def main():
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
         system_prompt = (
-            "Tu es un assistant étudiant."
-            "Si tu ne peux pas répondre en utilisant un tool, dis: 'je ne peux pas répondre cela dépasse mes compétences'."
-            "Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
+            "You are a student assistant."
+            "If you cannot answer using a tool, say: 'I cannot answer, this is beyond my capabilities'."
+            "Choose the correct tool to answer. If it's in the course, use search_course. If it's a definition, use search_wikipedia."
         )
         
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
