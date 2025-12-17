@@ -65,13 +65,20 @@ def search_course(query: str) -> str:
 def search_wikipedia(query: str) -> str:
     """
     Effectue une recherche sur Wikipedia pour trouver des définitions, des faits historiques ou des concepts généraux.
+    1. NE RECOPIE PAS le texte brut.
+    2. SYNTHÉTISE la réponse en 3-4 phrases claires.
+    3. NETTOIE les formules mathématiques (enlève les balises LaTeX comme 'displaystyle').
     Args:
         query: Le sujet exact ou le terme à rechercher au format JSON (ex: "Vanishing gradient", "Victor Hugo").
     """
     try:
         # Initialisation du retriever
-        retriever = WikipediaRetriever() 
-        retriever.top_k_results = 2
+        retriever = WikipediaRetriever(
+            top_k_results=1,
+            doc_content_chars_max=2000
+        ) 
+        
+        
         
         # Invocation
         docs = retriever.invoke(query)
