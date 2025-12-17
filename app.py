@@ -4,7 +4,7 @@ import tempfile
 from dotenv import load_dotenv
 
 # --- Nouveaux Imports pour l'Agent ---
-from langchain.tools.retriever import create_retriever_tool
+from langchain.tools import tool
 from langchain.agents import create_tool_calling_agent, AgentExecutor
 
 # --- Imports Standards ---
