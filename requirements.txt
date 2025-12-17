@@ -10,3 +10,4 @@ pypdf
 faiss-cpu
 python-dotenv
 wikipedia
+sentence-transformers
