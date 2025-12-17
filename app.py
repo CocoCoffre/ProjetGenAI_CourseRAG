@@ -152,7 +152,8 @@ def main():
         system_prompt = (
             "You are a student assistant."
             "If you cannot answer using a tool, say: 'I cannot answer, this is beyond my capabilities'."
-            "Choose the correct tool to answer. If it's in the course, use search_course. If it's a definition, use search_wikipedia."
+            "Choose the correct tool to answer. If it's in the course, use search_course."
+            "Use search_wikipedia only If the word 'definition' is present in user's request"
         )
         
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
