@@ -1,11 +1,9 @@
 streamlit
-pydantic<2.0.0
-langchain==0.1.20
-langchain-community==0.0.38
-langchain-core==0.1.52
-langchain-text-splitters
-langchain-groq
+langchain-classic
+langchain-community
 langchain-huggingface
+langchain-groq
+langchain-text-splitters
 pypdf
 faiss-cpu
 python-dotenv
