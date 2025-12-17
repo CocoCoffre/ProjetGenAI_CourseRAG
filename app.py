@@ -65,9 +65,8 @@ def search_course(query: str) -> str:
 def search_wikipedia(query: str) -> str:
     """
     Effectue une recherche sur Wikipedia pour trouver des définitions, des faits historiques ou des concepts généraux.
-    
     Args:
-        query: Le sujet exact ou le terme à rechercher (ex: "Vanishing gradient", "Victor Hugo").
+        query: Le sujet exact ou le terme à rechercher au format JSON (ex: "Vanishing gradient", "Victor Hugo").
     """
     try:
         # Initialisation du retriever
