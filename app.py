@@ -58,7 +58,16 @@ def search_course(query: str) -> str:
     # Recherche
     results = st.session_state.vectorstore.similarity_search(query, k=4)
     return "\n\n".join([doc.page_content for doc in results])
-
+    
+@tool
+def wiki_search(query: str) -> str:
+    """
+    Cherche une définition encyclopédique sur Wikipedia.
+    Utile pour les biographies, les concepts historiques ou généraux.
+    """
+    api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=1000)
+    wiki = WikipediaQueryRun(api_wrapper=api_wrapper)
+    return wiki.run(query)
 # --- 3. APPLICATION ---
 
 def main():
@@ -105,7 +114,7 @@ def main():
             temperature=0
         )
         
-        tools = [search_course]
+        tools = [search_course, wiki_search]
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
