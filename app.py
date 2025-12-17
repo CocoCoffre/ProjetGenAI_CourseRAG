@@ -3,17 +3,17 @@ import os
 import tempfile
 from dotenv import load_dotenv
 
-# --- Imports Officiels (Fixés pour le Cloud) ---
+# --- Tes Imports Spécifiques (langchain-classic) ---
+from langchain_classic.chains.retrieval import create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+
+# --- Autres Imports nécessaires ---
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-
-# ICI : On utilise les chemins officiels (anciennement 'langchain_classic' chez toi)
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 
 # --- Config ---
 st.set_page_config(page_title="Projet RAG Étudiant", page_icon="🎓")
@@ -45,19 +45,18 @@ def build_vector_store(documents):
     )
     splits = text_splitter.split_documents(documents)
     
-    # Modèle d'embedding local
+    # Embeddings
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
     vectorstore = FAISS.from_documents(splits, embeddings)
     return vectorstore
 
 def get_rag_chain(vectorstore):
-    """Crée la chaîne RAG."""
+    """Crée la chaîne RAG avec langchain-classic."""
     
-    # API Key
-    try:
-        groq_api_key = st.secrets["GROQ_API_KEY"]
-    except KeyError:
+    # Récupération API Key
+    groq_api_key = st.secrets.get("GROQ_API_KEY")
+    if not groq_api_key:
         st.error("ERREUR : Clé GROQ_API_KEY manquante.")
         st.stop()
 
@@ -80,7 +79,7 @@ def get_rag_chain(vectorstore):
     Question: {input}
     """)
 
-    # Chaînes (LCEL)
+    # Utilisation des fonctions de langchain_classic
     document_chain = create_stuff_documents_chain(llm, prompt)
     retriever = vectorstore.as_retriever()
     retrieval_chain = create_retrieval_chain(retriever, document_chain)
@@ -103,8 +102,11 @@ def main():
             if uploaded_files:
                 with st.spinner("Analyse en cours..."):
                     docs = process_documents(uploaded_files)
-                    st.session_state.vectorstore = build_vector_store(docs)
-                    st.success(f"Terminé ! {len(docs)} pages analysées.")
+                    if docs:
+                        st.session_state.vectorstore = build_vector_store(docs)
+                        st.success(f"Terminé ! {len(docs)} pages analysées.")
+                    else:
+                        st.warning("Aucun texte extrait.")
             else:
                 st.warning("Ajoutez un fichier d'abord.")
 
@@ -117,11 +119,14 @@ def main():
             
             with st.chat_message("assistant"):
                 with st.spinner("Réflexion..."):
-                    chain = get_rag_chain(st.session_state.vectorstore)
-                    res = chain.invoke({"input": user_input})
-                    st.write(res["answer"])
+                    try:
+                        chain = get_rag_chain(st.session_state.vectorstore)
+                        res = chain.invoke({"input": user_input})
+                        st.write(res["answer"])
+                    except Exception as e:
+                        st.error(f"Erreur : {e}")
         else:
-            st.warning("Veuillez traiter les documents à gauche.")
+            st.warning("Veuillez d'abord traiter les documents.")
 
 if __name__ == "__main__":
     main()
