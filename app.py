@@ -66,6 +66,7 @@ def search_wikipedia(query: str) -> str:
     """
     Cherche des définitions ou des faits historiques sur Wikipedia.
     Utilise cet outil pour les concepts généraux (ex: 'Qui est Victor Hugo ?', 'Définition de la mitose').
+    Utilise aussi si on te spécifie d'utiliser wikipedia
     """
     try:
         # On utilise exactement ton import
@@ -131,7 +132,7 @@ def main():
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
         system_prompt = "Tu es un assistant étudiant. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
-        agent_graph = create_agent(llm, tools=tools, state_modifier=system_prompt)
+        agent_graph = create_agent(llm, tools=tools, messages_modifier=system_prompt)
 
         # 4. Exécution (Syntaxe LangGraph)
         # On doit passer l'état actuel (les messages)
