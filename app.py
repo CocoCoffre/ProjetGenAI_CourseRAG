@@ -132,7 +132,7 @@ def main():
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
         system_prompt = "Tu es un assistant étudiant. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia."
-        agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
+        agent_graph = create_agent(llm, tools=tools, system_prompt="Tu es un assistant étudiant. Choisis le bon outil pour répondre. Si c'est dans le cours, utilise search_course. Si c'est une définition, search_wikipedia.")
 
         # 4. Exécution (Syntaxe LangGraph)
         # On doit passer l'état actuel (les messages)
