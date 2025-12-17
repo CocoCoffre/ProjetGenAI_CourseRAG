@@ -3,23 +3,25 @@ import os
 import tempfile
 from dotenv import load_dotenv
 
-# --- Nouveaux Imports pour l'Agent ---
+# --- IMPORTS STRICTS (Basés sur ta doc LangGraph) ---
 from langchain.tools import tool
-from langchain.agents import create_agent
+from langchain_groq import ChatGroq
+# C'est LA fonction dont parle ta doc (qui construit un graph):
+from langgraph.prebuilt import create_react_agent as create_agent 
 
-# --- Imports Standards ---
+# --- Imports standards RAG ---
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from langchain_groq import ChatGroq
-from langchain_core.prompts import ChatPromptTemplate
 
 # --- Config ---
-st.set_page_config(page_title="Agent Étudiant ReAct", page_icon="🤖")
+st.set_page_config(page_title="Agent Étudiant (LangGraph)", page_icon="🤖")
+
+# --- 1. BACKEND (PDF) ---
 
 def process_documents(uploaded_files):
-    """Charge et lit les PDF."""
+    """Lecture des PDF."""
     documents = []
     for file in uploaded_files:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
@@ -35,105 +37,99 @@ def process_documents(uploaded_files):
     return documents
 
 def build_vector_store(documents):
-    """Indexe les documents."""
+    """Indexation."""
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
     splits = text_splitter.split_documents(documents)
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(splits, embeddings)
     return vectorstore
 
-def get_agent_executor(vectorstore):
+# --- 2. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
+
+@tool
+def search_course(query: str) -> str:
     """
-    Crée l'agent ReAct capable d'utiliser le cours comme un outil.
+    Recherche des informations dans le cours PDF.
+    Utilise cet outil pour répondre aux questions sur le contenu des documents.
     """
-    groq_api_key = st.secrets.get("GROQ_API_KEY")
-    if not groq_api_key:
-        st.error("Clé API manquante.")
-        st.stop()
-
-    # 1. Le LLM (Cerveau)
-    llm = ChatGroq(
-        groq_api_key=groq_api_key, 
-        model_name="llama-3.3-70b-versatile", 
-        temperature=0
-    )
-
-    # 2. Création de l'outil de recherche (Step 1)
-    retriever = vectorstore.as_retriever()
-    retriever_tool = create_retriever_tool(
-        retriever,
-        name="recherche_cours_pdf",
-        description="Utilise cet outil pour trouver des informations dans les documents de cours PDF fournis par l'utilisateur. Cherche toujours ici en premier si la question porte sur le cours."
-    )
+    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
+        return "Aucun document n'est chargé."
     
-    tools = [retriever_tool]
+    # Recherche
+    results = st.session_state.vectorstore.similarity_search(query, k=4)
+    return "\n\n".join([doc.page_content for doc in results])
 
-    # 3. Le Prompt de l'Agent (Instruction système)
-    # On définit comment l'agent doit se comporter
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "Tu es un assistant étudiant intelligent. Tu as accès à des documents de cours. "
-                   "Utilise tes outils pour répondre aux questions. "
-                   "Si l'information est dans le cours, cite le contexte. "
-                   "Si la question est hors sujet (ex: météo), dis que tu ne peux répondre qu'au cours."),
-        ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}"), # IMPORTANT: Là où l'agent 'réfléchit'
-    ])
-
-    # 4. Construction de l'Agent (Step 2)
-    agent = create_tool_calling_agent(llm, tools, prompt)
-    
-    # 5. L'Exécuteur (Celui qui fait tourner la boucle)
-    agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        verbose=True # Affiche le raisonnement dans la console (logs)
-    )
-    
-    return agent_executor
+# --- 3. APPLICATION ---
 
 def main():
-    st.title("🤖 Agent Étudiant (Mode ReAct)")
-    st.markdown("Cet agent peut **décider** d'utiliser vos cours pour répondre.")
-
+    st.title("🤖 Agent Étudiant")
+    
+    # Initialisation de la mémoire
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
 
-    # Sidebar : Chargement
+    # Sidebar
     with st.sidebar:
-        st.header("Base de Connaissances")
-        files = st.file_uploader("Ajouter des cours (PDF)", type="pdf", accept_multiple_files=True)
-        if st.button("Analyser et Indexer") and files:
-            with st.spinner("Lecture et indexation..."):
+        st.header("Documents")
+        files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
+        if st.button("Traiter") and files:
+            with st.spinner("Analyse..."):
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
-                st.success(f"{len(docs)} pages ingérées dans la mémoire.")
+                st.success("Prêt !")
 
-    # Chat Interface
-    question = st.chat_input("Pose ta question à l'agent...")
-    
-    if question:
-        # Affichage message utilisateur
-        st.chat_message("user").write(question)
+    # Affichage de l'historique
+    for msg in st.session_state.messages:
+        # LangGraph utilise des formats de messages spécifiques, on adapte l'affichage
+        role = "user" if msg.type == "human" else "assistant"
+        st.chat_message(role).write(msg.content)
 
-        if st.session_state.vectorstore is None:
-            st.warning("Attention : Aucun cours chargé. L'agent ne pourra compter que sur ses connaissances générales.")
-            # On pourrait empêcher l'exécution, mais un Agent peut aussi répondre sans outils !
-            # Pour l'exercice, on va quand même demander les docs
-        else:
-            with st.chat_message("assistant"):
-                with st.spinner("L'agent réfléchit et consulte ses outils..."):
-                    try:
-                        # Création de l'agent avec les outils liés au vectorstore actuel
-                        agent_executor = get_agent_executor(st.session_state.vectorstore)
-                        
-                        # Exécution
-                        response = agent_executor.invoke({"input": question})
-                        
-                        # Affichage réponse finale
-                        st.write(response["output"])
-                        
-                    except Exception as e:
-                        st.error(f"Erreur agent : {e}")
+    # Chat
+    user_input = st.chat_input("Votre question...")
+
+    if user_input:
+        # 1. Affichage User
+        st.chat_message("user").write(user_input)
+        
+        groq_api_key = st.secrets.get("GROQ_API_KEY")
+        if not groq_api_key:
+            st.error("Pas de clé API !")
+            st.stop()
+
+        # 2. Configuration Agent
+        llm = ChatGroq(
+            groq_api_key=groq_api_key, 
+            model_name="llama-3.3-70b-versatile",
+            temperature=0
+        )
+        
+        tools = [search_course]
+
+        # 3. Création de l'Agent (Syntaxe exacte create_agent)
+        # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
+        agent_graph = create_agent(llm, tools=tools)
+
+        # 4. Exécution (Syntaxe LangGraph)
+        # On doit passer l'état actuel (les messages)
+        inputs = {"messages": st.session_state.messages + [("human", user_input)]}
+        
+        with st.chat_message("assistant"):
+            with st.spinner("Réflexion..."):
+                try:
+                    # Invoke renvoie le nouvel état final
+                    response = agent_graph.invoke(inputs)
+                    
+                    # La réponse finale est le dernier message de l'agent
+                    final_message = response["messages"][-1]
+                    st.write(final_message.content)
+                    
+                    # Mise à jour de l'historique (On garde tout l'historique renvoyé par le graph)
+                    st.session_state.messages = response["messages"]
+                    
+                except Exception as e:
+                    st.error(f"Erreur: {e}")
 
 if __name__ == "__main__":
     main()
