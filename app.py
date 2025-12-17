@@ -9,8 +9,7 @@ from langchain_groq import ChatGroq
 # C'est LA fonction dont parle ta doc (qui construit un graph):
 from langgraph.prebuilt import create_react_agent as create_agent 
 
-from langchain_community.tools import WikipediaQueryRun
-from langchain_community.utilities import WikipediaAPIWrapper
+from langchain_community.retrievers import WikipediaRetriever
 
 # --- Imports standards RAG ---
 from langchain_community.document_loaders import PyPDFLoader
@@ -63,14 +62,22 @@ def search_course(query: str) -> str:
     return "\n\n".join([doc.page_content for doc in results])
     
 @tool
-def wiki_search(query: str) -> str:
+def search_wikipedia(query: str) -> str:
     """
-    Cherche une définition encyclopédique sur Wikipedia.
-    Utile pour les biographies, les concepts historiques ou généraux.
+    Cherche des définitions ou des faits historiques sur Wikipedia.
+    Utilise cet outil pour les concepts généraux (ex: 'Qui est Victor Hugo ?', 'Définition de la mitose').
     """
-    api_wrapper = WikipediaAPIWrapper(top_k_results=1, doc_content_chars_max=1000)
-    wiki = WikipediaQueryRun(api_wrapper=api_wrapper)
-    return wiki.run(query)
+    try:
+        # On utilise exactement ton import
+        retriever = WikipediaRetriever() 
+        # On limite à 2 documents pour ne pas saturer le LLM
+        retriever.top_k_results = 2
+        
+        docs = retriever.invoke(query)
+        return "\n\n".join([doc.page_content for doc in docs])
+    except Exception as e:
+        return f"Erreur Wikipedia : {e}"
+        
 # --- 3. APPLICATION ---
 
 def main():
@@ -117,7 +124,7 @@ def main():
             temperature=0
         )
         
-        tools = [search_course, wiki_search]
+        tools = [search_course, search_wikipedia]
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
