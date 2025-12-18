@@ -142,7 +142,7 @@ def create_study_plan(days: int, topic: str = "General") -> str:
         return "Impossible : aucun cours chargé."
     
     # Stratégie : On cherche les termes structurels pour comprendre la taille du cours
-    search_queries = ["Sommaire", "Table of contents", "Chapitre", "Introduction", "Conclusion"]
+    search_queries = ["Sommaire", "Table of contents", "Chapitre", "Introduction", "Conclusion", "Lecture", topic ]
     structural_content = ""
     
     for query in search_queries:
