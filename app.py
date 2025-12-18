@@ -62,13 +62,33 @@ def process_documents(uploaded_files):
     return documents
 
 def build_vector_store(documents):
-    """Indexation."""
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    """Indexation with optimized chunking."""
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,        # Smaller chunks for better retrieval
+        chunk_overlap=100,
+        separators=["\n\n", "\n", ".", " "]
+    )
     splits = text_splitter.split_documents(documents)
+    print(f"DEBUG: Created {len(splits)} chunks from {len(documents)} documents")
+    
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     vectorstore = FAISS.from_documents(splits, embeddings)
+    print(f"DEBUG: Vectorstore indexed with {vectorstore.index.ntotal} vectors")
+    
     return vectorstore
 
+def check_vectorstore_quality(vectorstore, test_queries):
+    """Check if vectorstore is working by running test queries."""
+    print("\n[VECTORSTORE QUALITY CHECK]")
+    print(f"Total vectors indexed: {vectorstore.index.ntotal}")
+    
+    for query in test_queries:
+        results = vectorstore.similarity_search(query, k=2)
+        print(f"\nQuery: '{query}'")
+        print(f"  Matches: {len(results)}")
+        if results:
+            print(f"  Top match: {results[0].page_content[:100]}...")
+            
 # --- 2. DÉFINITION DES SCHÉMAS  ---
 
 
@@ -81,14 +101,32 @@ def search_course(query: str) -> str:
     Use this tool to answer questions about the specific course content.
     """
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
-        return "Aucun document n'est charge."
+        return "ERROR: Vectorstore not initialized. No documents loaded."
     
-    results = st.session_state.vectorstore.similarity_search(query, k=4)
+    print(f"\n[DEBUG search_course]")
+    print(f"  Query: {query}")
+    print(f"  Vectorstore size: {st.session_state.vectorstore.index.ntotal}")
     
-    if not results:
-        return f"Aucun resultat trouve pour '{query}' dans les documents."
+    try:
+        results = st.session_state.vectorstore.similarity_search(query, k=4)
+        print(f"  Results found: {len(results)}")
+        
+        if not results or len(results) == 0:
+            print(f"  No matches for '{query}'")
+            return f"No content found for '{query}' in documents. Try different keywords or check search_wikipedia."
+        
+        # Format results with source information
+        formatted = []
+        for i, doc in enumerate(results, 1):
+            source = doc.metadata.get('source', 'Unknown source')
+            print(f"  Match {i}: {source} - {doc.page_content[:50]}...")
+            formatted.append(f"[From {source}]\n{doc.page_content}")
+        
+        return "\n---\n".join(formatted)
     
-    return "\n\n".join([doc.page_content for doc in results])
+    except Exception as e:
+        print(f"  ERROR: {str(e)}")
+        return f"Error searching documents: {str(e)}"
     
 @tool
 def search_wikipedia(query: str) -> str:
@@ -209,7 +247,13 @@ def main():
         files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
         
         process_btn = st.button("Traiter les documents")
+        # Check vectorstore quality
+        check_vectorstore_quality(
+            st.session_state.vectorstore,
+            ["LSTM", "gradient", "neurone", "apprentissage"]
+        )
         
+        st.success("Pret !")
         if process_btn and files:
             with st.spinner("Analyse..."):
                 docs = process_documents(files)
