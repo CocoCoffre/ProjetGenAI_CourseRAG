@@ -259,7 +259,7 @@ def main():
                     ["LSTM", "gradient", "neurone", "apprentissage"]
                 )
         
-        st.success("Pret !")
+                st.success("Pret !")
         st.markdown("---")
         st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
         
