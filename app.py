@@ -131,7 +131,8 @@ def generate_quiz_context(topic: str) -> str:
 @tool
 def create_study_plan(days: int, topic: str = "General") -> str:
     """
-    Analyzes the document structure to help generate a revision schedule.
+    Analyzes the document structure uploaded by the user to help generate a revision schedule.
+    By default take all documents uploaded in account to make the planning. 
     Use this tool when the user asks for a 'planning', 'schedule', or 'roadmap'.
     Args:
         days: The number of days the user has to study.
