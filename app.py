@@ -22,22 +22,45 @@ from langchain_community.vectorstores import FAISS
 # --- Config ---
 st.set_page_config(page_title="Agent Étudiant (LangGraph)", page_icon="🤖")
 
+if "doc_previews" not in st.session_state:
+    st.session_state.doc_previews = {}
 # --- 1. BACKEND (PDF) ---
 
 def process_documents(uploaded_files):
-    """Lecture des PDF."""
+    """Lecture des PDF avec extraction des noms de fichiers réels."""
     documents = []
+    
+    # On vide les previews précédents pour ne pas mélanger les cours
+    st.session_state.doc_previews = {}
+    
     for file in uploaded_files:
+        # Création fichier temporaire
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             tmp_file.write(file.getvalue())
             tmp_path = tmp_file.name
+            
         try:
             loader = PyPDFLoader(tmp_path)
             docs = loader.load()
+            
+            # --- CORRECTION CRITIQUE : GESTION DES METADONNÉES ---
+            # PyPDFLoader met le chemin temporaire dans 'source'. On remet le vrai nom du fichier.
+            # On en profite pour capturer le début du texte pour le planning.
+            full_text_preview = ""
+            for i, doc in enumerate(docs):
+                doc.metadata["source"] = file.name # Remplace '/tmp/x.pdf' par 'Lecture 01.pdf'
+                if i < 3: # On prend les 3 premières pages pour l'aperçu structurel
+                    full_text_preview += doc.page_content + "\n"
+            
+            # On stocke cet aperçu dans la session
+            st.session_state.doc_previews[file.name] = full_text_preview[:2000] # Limite à 2000 car
+            
             documents.extend(docs)
+            
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
+                
     return documents
 
 def build_vector_store(documents):
@@ -129,31 +152,31 @@ def generate_quiz_context(topic: str) -> str:
     return f"Contenu du cours sur '{topic}' :\n{content}"
     
 @tool
-def create_study_plan(days: int, topic: str = "General") -> str:
+def create_study_plan(days: int, focus: str = "All") -> str:
     """
-    Analyzes the document structure uploaded by the user to help generate a revision schedule.
-    By default take all documents uploaded in account to make the planning. 
-    Use this tool when the user asks for a 'planning', 'schedule', or 'roadmap'.
+    Generates a revision schedule based on the ACTUAL filenames and content of uploaded documents.
+    Use this tool when user asks for a planning. It bypasses semantic search to look at file headers directly.
+    
     Args:
         days: The number of days the user has to study.
-        topic: The specific subject or title of the course.
+        focus: Specific focus or 'All' to cover all uploaded documents..
     """
-    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
-        return "Impossible : aucun cours chargé."
     
-    # Stratégie : On cherche les termes structurels pour comprendre la taille du cours
-    search_queries = ["Sommaire", "Table of contents", "Chapitre", "Introduction", "Conclusion", "Lecture", topic ]
-    structural_content = ""
+    if not st.session_state.doc_previews:
+        return "Erreur : Aucun document n'est chargé en mémoire. Veuillez uploader des PDF."
+
+    # On construit un texte qui contient : "Nom du fichier" : "Début du contenu..."
+    context_str = "Voici la liste des documents chargés et leur contenu introductif :\n\n"
     
-    for query in search_queries:
-        results = st.session_state.vectorstore.similarity_search(query, k=2)
-        for doc in results:
-            structural_content += doc.page_content + "\n"
+    for filename, preview in st.session_state.doc_previews.items():
+        context_str += f"--- DOCUMENT: {filename} ---\n"
+        context_str += f"Début du contenu : {preview}\n\n"
     
-    # On renvoie la structure brute + l'instruction
     return (
-        f"Voici un aperçu de la structure du cours (Sommaire/Chapitres) :\n{structural_content[:3000]}\n\n"
-        f"INSTRUCTION POUR L'AGENT : Utilise ces informations pour créer un tableau Markdown de révision sur {days} jours."
+        f"{context_str}\n"
+        f"INSTRUCTION : Analyse les titres des documents et leur contenu introductif ci-dessus.\n"
+        f"Crée un planning de révision logique sur {days} jours qui couvre ces documents.\n"
+        f"Si le paramètre focus est '{focus}', insiste dessus."
     )
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
@@ -193,7 +216,7 @@ def main():
                 st.success("Prêt !")
         st.markdown("---")
         st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
-
+        
         # --- INDICATEUR D'ÉTAT (DEBUG VISUEL) ---
         if st.session_state.vectorstore is not None:
             st.success("🟢 Mémoire chargée : L'agent a accès aux cours.")
@@ -202,6 +225,11 @@ def main():
         else:
             st.warning("🔴 Mémoire vide : L'agent ne connait pas le cours.")
             st.caption("👉 Veuillez cliquer sur 'Traiter les documents' ci-dessus.")
+        # Affichage des fichiers détectés
+        if "doc_previews" in st.session_state and st.session_state.doc_previews:
+            st.markdown("### Fichiers en mémoire :")
+            for f_name in st.session_state.doc_previews.keys():
+                st.caption(f"📄 {f_name}")
     # Affichage de l'historique
     for msg in st.session_state.messages:
         # LangGraph utilise des formats de messages spécifiques, on adapte l'affichage
