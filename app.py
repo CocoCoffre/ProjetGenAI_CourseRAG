@@ -70,7 +70,7 @@ def search_course(query: str) -> str:
 def search_wikipedia(query: str) -> str:
     """
     Searches for a general definition or historical fact on Wikipedia.
-    Use this tool ONLY when asked about general knowledge concepts not found in the PDF.
+    Use this tool ONLY when asked about general knowledge concepts that you cannot found in the PDF.
     Do NOT used this tool if asked for a quizz.
     1. DO NOT COPY the raw text.
     2. Summarize the answer in 3-4 clear sentences.
@@ -227,7 +227,7 @@ def main():
          "RULES:\n"
          "1. LANGUAGE: ALWAYS answer in the same language as the user's question, regardless of the internal reasoning.\n"
          "2. COURSE QUESTIONS: Use 'search_course' to find answers in the PDF. Cite the context if possible.\n"
-         "3. DEFINITIONS: Use 'search_wikipedia' for general definitions if the course is not clear enough.\n"
+         "3. DEFINITIONS: Use 'search_wikipedia' for general definitions if you cannot find the answer in the PDF files.\n"
          "   - EXTRACT the main topic/keyword (e.g. user says 'Quiz on vanishing gradient problem', you extract 'Vanishing gradient').\n"
          "   - Use 'generate_quiz_context' with that specific keyword.\n"
          "   - Generate ONE multiple-choice question (A, B, C) based strictly on the retrieved context.\n"
