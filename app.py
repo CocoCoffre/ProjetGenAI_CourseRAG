@@ -106,6 +106,7 @@ def generate_quiz_context(topic: str) -> str:
 
     Args:
         topic: The specific keyword (e.g. "Vanishing gradient", "LSTM"). Avoid sentences, use keywords.
+        
     """
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
         return "Impossible de faire un quiz : aucun cours chargé."
@@ -128,12 +129,13 @@ def generate_quiz_context(topic: str) -> str:
     return f"Contenu du cours sur '{topic}' :\n{content}"
     
 @tool
-def create_study_plan(days: int) -> str:
+def create_study_plan(days: int, topic: str = "General") -> str:
     """
     Analyzes the document structure to help generate a revision schedule.
     Use this tool when the user asks for a 'planning', 'schedule', or 'roadmap'.
     Args:
         days: The number of days the user has to study.
+        topic: The specific subject or title of the course.
     """
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
         return "Impossible : aucun cours chargé."
@@ -150,7 +152,7 @@ def create_study_plan(days: int) -> str:
     # On renvoie la structure brute + l'instruction
     return (
         f"Voici un aperçu de la structure du cours (Sommaire/Chapitres) :\n{structural_content[:3000]}\n\n"
-        f"INSTRUCTION POUR L'AGENT : Utilise ces informations pour créer un tableau de révision sur {days} jours."
+        f"INSTRUCTION POUR L'AGENT : Utilise ces informations pour créer un tableau Markdown de révision sur {days} jours."
     )
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
@@ -185,7 +187,7 @@ def main():
                 st.session_state.vectorstore = build_vector_store(docs)
                 st.success("Prêt !")
         st.markdown("---")
-        st.caption("Outils disponibles : Cours, Wikipedia")
+        st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
 
     # Affichage de l'historique
     for msg in st.session_state.messages:
