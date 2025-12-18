@@ -160,21 +160,18 @@ def create_study_plan(days: int, focus: str = "All") -> str:
         focus: Specific focus or 'All' to cover all uploaded documents..
     """
     
-    if not st.session_state.doc_previews:
-        return "Erreur : Aucun document n'est chargé en mémoire. Veuillez uploader des PDF."
+    previews = st.session_state.get("doc_previews", {})
 
-    # On construit un texte qui contient : "Nom du fichier" : "Début du contenu..."
-    context_str = "Voici la liste des documents chargés et leur contenu introductif :\n\n"
-    
-    for filename, preview in st.session_state.doc_previews.items():
-        context_str += f"--- DOCUMENT: {filename} ---\n"
-        context_str += f"Début du contenu : {preview}\n\n"
+    if not previews:
+        return "Erreur : Aucun document en mémoire. L'utilisateur doit uploader des PDF."
+
+    context_str = "Voici les documents chargés :\n\n"
+    for filename, preview in previews.items():
+        context_str += f"--- DOC: {filename} ---\nDébut: {preview}\n\n"
     
     return (
         f"{context_str}\n"
-        f"INSTRUCTION : Analyse les titres des documents et leur contenu introductif ci-dessus.\n"
-        f"Crée un planning de révision logique sur {days} jours qui couvre ces documents.\n"
-        f"Si le paramètre focus est '{focus}', insiste dessus."
+        f"INSTRUCTION : Crée un planning sur {days} jours en citant ces fichiers exacts."
     )
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
@@ -193,14 +190,14 @@ python_repl_tool.description = (
 def main():
     st.title("🤖 Agent Étudiant")
     
-    # Initialisation de la mémoire
+    # --- INITIALISATION ROBUSTE (Tout en haut) ---
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
-    
     if "doc_previews" not in st.session_state:
-        st.session_state.doc_previews = {}
+        st.session_state.doc_previews = {} # Initialisation garantie
+        
     # Sidebar
     with st.sidebar:
         st.header("Documents")
@@ -225,6 +222,7 @@ def main():
         else:
             st.warning("🔴 Mémoire vide : L'agent ne connait pas le cours.")
             st.caption("👉 Veuillez cliquer sur 'Traiter les documents' ci-dessus.")
+            
         # Affichage des fichiers détectés
         if "doc_previews" in st.session_state and st.session_state.doc_previews:
             st.markdown("### Fichiers en mémoire :")
