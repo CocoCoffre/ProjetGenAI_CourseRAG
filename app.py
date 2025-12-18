@@ -10,6 +10,7 @@ from langchain_groq import ChatGroq
 from langchain.agents import create_agent 
 
 from langchain_community.retrievers import WikipediaRetriever
+from langchain_experimental.tools import PythonREPLTool
 
 # --- Imports standards RAG ---
 from langchain_community.document_loaders import PyPDFLoader
@@ -126,8 +127,19 @@ def generate_quiz_context(topic: str) -> str:
     
     return f"Contenu du cours sur '{topic}' :\n{content}"
 
+# --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
+# On instancie l'outil officiel
+python_repl_tool = PythonREPLTool()
+python_repl_tool.name = "python_interpreter"
+python_repl_tool.description = (
+    "A Python shell. Use this to execute python commands. "
+    "Input should be a valid python script. "
+    "Use this to solve math problems, calculating statistics, or plotting data. "
+    "If you want to see the output of a value, you should print it with `print(...)`."
+    "If you generate a plot, save it as 'plot.png'."
+)
 
-# --- 3. APPLICATION ---
+# --- 4. APPLICATION ---
 
 def main():
     st.title("🤖 Agent Étudiant")
@@ -178,7 +190,7 @@ def main():
             temperature=0
         )
         
-        tools = [search_course, search_wikipedia, generate_quiz_context]
+        tools = [search_course, search_wikipedia, generate_quiz_context, python_repl_tool]
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
@@ -194,7 +206,12 @@ def main():
          "   - Generate ONE multiple-choice question (A, B, C) based strictly on the retrieved context.\n"
          "   - DO NOT give the answer immediately. Wait for the user to reply.\n"
          "   - Once the user replies, correct them and explain why.\n"
-         "5. BEHAVIOR: Be pedagogical, encouraging, and clear.")
+         "4. 'generate_quiz_context' for quizzes ('ask me about...').\n"
+         "5. 'python_interpreter' for MATHS, LOGIC, or PLOTTING.\n"
+         "   - If asked to plot/draw: Write python code using matplotlib.\n"
+         "   - Save the figure using `plt.savefig('plot.png')`.\n"
+         "   - Do not try to show it with plt.show().\n"
+         "6. BEHAVIOR: Be pedagogical, encouraging, and clear.")
         
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
 
@@ -217,7 +234,10 @@ def main():
                     
                     # 4. AFFICHER LA REPONSE
                     st.write(final_answer)
-                    
+
+                    if os.path.exists("plot.png"):
+                        st.image("plot.png", caption="Graphique généré par l'Agent")
+                        os.remove("plot.png") # Nettoyage
                     # 5. METTRE A JOUR LA MEMOIRE DE SESSION
                     # On remplace l'historique par celui retourné par l'agent (qui contient les traces des outils)
                     st.session_state.messages = full_history
