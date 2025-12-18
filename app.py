@@ -81,10 +81,13 @@ def search_course(query: str) -> str:
     Use this tool to answer questions about the specific course content.
     """
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
-        return "Aucun document n'est chargé."
+        return "Aucun document n'est charge."
     
-    # Recherche
     results = st.session_state.vectorstore.similarity_search(query, k=4)
+    
+    if not results:
+        return f"Aucun resultat trouve pour '{query}' dans les documents."
+    
     return "\n\n".join([doc.page_content for doc in results])
     
 @tool
@@ -160,27 +163,22 @@ def create_study_plan(days: int, focus: str = "All") -> str:
         focus: Specific focus or 'All' to cover all uploaded documents.
     """
     
-    # Try to access from session state as fallback
-    previews = st.session_state.get("doc_previews", {})
+     previews = st.session_state.get("doc_previews", {})
     
     if not previews:
         return (
-            "❌ Aucun document détecté. Vérifiez que vous avez uploadé et traité les PDFs.\n"
-            "L'agent a reçu la liste des fichiers disponibles dans le contexte système, "
-            "mais les données de prévisualisation ne sont pas accessibles."
+            "Aucun document detecte. Verifiez que vous avez uploade et traite les PDFs."
         )
     
-    context_str = "📚 **Documents disponibles pour la révision :**\n\n"
+    context_str = "Documents disponibles pour la revision:\n\n"
     for filename, preview in previews.items():
-        # Show first 400 chars of each document
-        context_str += f"**📖 {filename}**\n``````\n\n"
+        context_str += f"{filename}\nDebut: {preview[:400]}...\n\n"
     
     return (
         f"{context_str}\n"
-        f"**INSTRUCTION POUR L'AGENT :**\n"
-        f"Crée un planning de révision détaillé sur **{days} jour(s)** en citant les thèmes principaux "
-        f"de chaque document. Format obligatoire : tableau Markdown avec colonnes "
-        f"(Jour | Sujets à réviser | Objectifs d'apprentissage)."
+        f"Cree un planning de revision detaille sur {days} jour(s) en citant les themes principaux "
+        f"de chaque document. Format: tableau Markdown avec colonnes "
+        f"(Jour | Sujets a reviser | Objectifs d'apprentissage)."
     )
 
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
