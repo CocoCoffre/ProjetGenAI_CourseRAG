@@ -100,6 +100,9 @@ def generate_quiz_context(topic: str) -> str:
     """
     Extracts content from the course to prepare a quiz.
     Use this tool ONLY when the user explicitly asks for a quiz, a test, or an exercise.
+
+    Args:
+        topic: The specific keyword (e.g. "Vanishing gradient", "LSTM"). Avoid sentences, use keywords.
     """
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
         return "Impossible de faire un quiz : aucun cours chargé."
