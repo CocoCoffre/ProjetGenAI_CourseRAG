@@ -194,7 +194,292 @@ python_repl_tool.description = (
 # --- 4. APPLICATION ---
 
 def main():
-    st.title("🤖 Agent Étudiant")
+     # ✨ CUSTOM CSS - Design complet personnalisé
+    st.markdown("""
+    <style>
+    /* ===== RESET STREAMLIT BASE ===== */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Supprimer le padding par défaut */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 0rem;
+        padding-left: 2rem;
+        padding-right: 2rem;
+        max-width: 100%;
+    }
+    
+    /* ===== FOND & COULEURS ===== */
+    .stApp {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    /* ===== SIDEBAR CUSTOM ===== */
+    [data-testid="stSidebar"] {
+        background: rgba(255, 255, 255, 0.95);
+        border-right: 3px solid #667eea;
+        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    }
+    
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 {
+        color: #667eea;
+        font-weight: 700;
+    }
+    
+    /* ===== TITRE PRINCIPAL ===== */
+    h1 {
+        background: linear-gradient(90deg, #667eea, #764ba2);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 3rem !important;
+        font-weight: 900 !important;
+        text-align: center;
+        padding: 1.5rem 0;
+        margin-bottom: 2rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    /* ===== CONTAINER CHAT ===== */
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 20px !important;
+        padding: 1.5rem !important;
+        margin: 1rem 0 !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
+        border: 2px solid transparent !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stChatMessage:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
+    }
+    
+    /* Message utilisateur */
+    [data-testid="stChatMessageContent"] {
+        background: transparent !important;
+    }
+    
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+    }
+    
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) p {
+        color: white !important;
+    }
+    
+    /* Message assistant */
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border: 2px solid #667eea !important;
+    }
+    
+    /* ===== INPUT CHAT ===== */
+    .stChatInputContainer {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 25px !important;
+        padding: 1rem !important;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+        border: 2px solid #667eea !important;
+    }
+    
+    .stChatInputContainer textarea {
+        background: white !important;
+        border-radius: 20px !important;
+        border: 2px solid #e0e0e0 !important;
+        padding: 1rem !important;
+        font-size: 1rem !important;
+    }
+    
+    .stChatInputContainer textarea:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+    }
+    
+    /* ===== BOUTONS ===== */
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 15px !important;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4) !important;
+        transition: all 0.3s ease !important;
+        width: 100% !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
+    }
+    
+    .stButton > button:active {
+        transform: translateY(-1px) !important;
+    }
+    
+    /* ===== FILE UPLOADER ===== */
+    [data-testid="stFileUploader"] {
+        background: white !important;
+        border-radius: 15px !important;
+        padding: 1.5rem !important;
+        border: 2px dashed #667eea !important;
+    }
+    
+    [data-testid="stFileUploader"] label {
+        color: #667eea !important;
+        font-weight: 600 !important;
+    }
+    
+    /* ===== SUCCESS/WARNING/ERROR ===== */
+    .stSuccess {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+        color: white !important;
+        border-radius: 15px !important;
+        padding: 1rem !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3) !important;
+    }
+    
+    .stWarning {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+        color: white !important;
+        border-radius: 15px !important;
+        padding: 1rem !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3) !important;
+    }
+    
+    .stError {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
+        color: white !important;
+        border-radius: 15px !important;
+        padding: 1rem !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3) !important;
+    }
+    
+    /* ===== EXPANDER (DEBUG) ===== */
+    .streamlit-expanderHeader {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+        border-radius: 15px !important;
+        font-weight: 600 !important;
+        padding: 1rem !important;
+    }
+    
+    .streamlit-expanderContent {
+        background: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 0 0 15px 15px !important;
+        border: 2px solid #667eea !important;
+        border-top: none !important;
+    }
+    
+    /* ===== MARKDOWN STYLING ===== */
+    .stMarkdown h2 {
+        color: #667eea !important;
+        font-weight: 700 !important;
+        margin-top: 2rem !important;
+    }
+    
+    .stMarkdown h3 {
+        color: #764ba2 !important;
+        font-weight: 600 !important;
+    }
+    
+    .stMarkdown code {
+        background: rgba(102, 126, 234, 0.1) !important;
+        color: #667eea !important;
+        padding: 0.2rem 0.5rem !important;
+        border-radius: 5px !important;
+    }
+    
+    /* ===== SPINNER ===== */
+    .stSpinner > div {
+        border-top-color: #667eea !important;
+    }
+    
+    /* ===== CAPTIONS ===== */
+    .stCaption {
+        color: #764ba2 !important;
+        font-weight: 500 !important;
+    }
+    
+    /* ===== DIVIDER ===== */
+    hr {
+        border: none !important;
+        height: 2px !important;
+        background: linear-gradient(90deg, transparent, #667eea, transparent) !important;
+        margin: 2rem 0 !important;
+    }
+    
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .stChatMessage {
+        animation: fadeIn 0.5s ease-out;
+    }
+    
+    /* ===== SCROLLBAR ===== */
+    ::-webkit-scrollbar {
+        width: 12px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 10px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+    
+    /* ===== TITRE AVEC EMOJI ===== */
+    .custom-title {
+        text-align: center;
+        padding: 2rem 0;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 25px;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .custom-title h1 {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+    
+    .custom-subtitle {
+        color: #764ba2;
+        font-size: 1.2rem;
+        margin-top: 0.5rem;
+        font-weight: 500;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # ✨ TITRE CUSTOM AVEC HTML
+    st.markdown("""
+    <div class="custom-title">
+        <h1>🤖 Professeur IA</h1>
+        <p class="custom-subtitle">Votre assistant intelligent pour réviser vos cours</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Initialize session state
     if "messages" not in st.session_state:
