@@ -243,7 +243,7 @@ def main():
         st.session_state.messages.append(HumanMessage(content=user_input))
         
         if "doc_previews" not in st.session_state:
-        st.session_state.doc_previews = {} # Initialisation garantie
+            st.session_state.doc_previews = {} # Initialisation garantie
         groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
             st.error("Pas de clé API !")
