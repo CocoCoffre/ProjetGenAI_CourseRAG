@@ -4,7 +4,7 @@ import tempfile
 from dotenv import load_dotenv
 
 # --- IMPORTS STRICTS (Basés sur ta doc LangGraph) ---
-from langchain.tools import tool
+from langchain.tools import tool, Tool
 from langchain_groq import ChatGroq
 # C'est LA fonction dont parle ta doc (qui construit un graph):
 from langchain.agents import create_agent 
