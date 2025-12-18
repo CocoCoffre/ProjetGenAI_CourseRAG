@@ -94,32 +94,40 @@ def check_vectorstore_quality(vectorstore, test_queries):
 
 # --- 3. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
 
-def create_all_tools(vectorstore: FAISS, doc_previews: dict):
+def create_all_tools(vectorstore, doc_previews: dict):
     """
     Factory function that creates all tools with access to vectorstore and previews.
-    Call this AFTER documents are processed.
+    Returns a list of tool objects.
     """
     
     # Tool 1: search_course
-    def _search_course(query: str) -> str:
-        """Searches the course PDFs."""
+    @tool
+    def search_course(query: str) -> str:
+        """Search uploaded PDF course documents for information about the course content."""
         print(f"\n[DEBUG search_course] Query: {query}")
-        results = vectorstore.similarity_search(query, k=4)
-        print(f"  Results found: {len(results)}")
+        print(f"  Vectorstore size: {vectorstore.index.ntotal}")
         
-        if not results:
-            return f"No content found for '{query}' in documents."
-        
-        formatted = []
-        for doc in results:
-            source = doc.metadata.get('source', 'Unknown')
-            formatted.append(f"[From {source}]\n{doc.page_content}")
-        
-        return "\n---\n".join(formatted)
+        try:
+            results = vectorstore.similarity_search(query, k=4)
+            print(f"  Results found: {len(results)}")
+            
+            if not results:
+                return f"No content found for '{query}' in documents."
+            
+            formatted = []
+            for doc in results:
+                source = doc.metadata.get('source', 'Unknown')
+                formatted.append(f"[From {source}]\n{doc.page_content}")
+            
+            return "\n---\n".join(formatted)
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            return f"Error searching: {e}"
     
     # Tool 2: generate_quiz_context
-    def _generate_quiz(topic: str) -> str:
-        """Extracts course content for quiz generation."""
+    @tool
+    def generate_quiz_context(topic: str) -> str:
+        """Extract course content to prepare a quiz. Use ONLY when user asks for quiz/test/exercise."""
         retriever = vectorstore.as_retriever(
             search_type="mmr",
             search_kwargs={'k': 6, 'fetch_k': 20}
@@ -130,17 +138,19 @@ def create_all_tools(vectorstore: FAISS, doc_previews: dict):
             return f"No information found on '{topic}'."
         
         content = "\n\n".join([doc.page_content for doc in results])
+        print(f"DEBUG QUIZ - Topic: {topic} - Chunks found: {len(results)}")
         return f"Course content on '{topic}':\n{content}"
     
     # Tool 3: create_study_plan
-    def _create_plan(days: int, focus: str = "All") -> str:
-        """Creates study plan based on documents."""
+    @tool
+    def create_study_plan(days: int, focus: str = "All") -> str:
+        """Create revision schedule based on uploaded documents. Use when user asks for planning/schedule/revision."""
         context_str = "Documents available:\n\n"
         for filename, preview in doc_previews.items():
             context_str += f"{filename}\n{preview[:300]}...\n\n"
         
-        if not context_str or context_str == "Documents available:\n\n":
-            context_str = "No preview available"
+        if not doc_previews:
+            context_str = "No preview available - use documents from system prompt"
         
         return (
             f"{context_str}\n"
@@ -148,8 +158,9 @@ def create_all_tools(vectorstore: FAISS, doc_previews: dict):
         )
     
     # Tool 4: search_wikipedia (doesn't need vectorstore)
-    def _search_wikipedia(query: str) -> str:
-        """Searches Wikipedia for general knowledge."""
+    @tool
+    def search_wikipedia(query: str) -> str:
+        """Search Wikipedia for general knowledge. Use ONLY if search_course finds nothing."""
         try:
             from langchain_community.retrievers import WikipediaRetriever
             retriever = WikipediaRetriever(top_k_results=1, doc_content_chars_max=2000)
@@ -160,29 +171,12 @@ def create_all_tools(vectorstore: FAISS, doc_previews: dict):
         except Exception as e:
             return f"Wikipedia search error: {e}"
     
-    # Return all tools as a list
+    # Return list of tool objects
     return [
-        Tool(
-            name="search_course",
-            description="Search uploaded PDF course documents for information.",
-            func=_search_course,
-        ),
-        Tool(
-            name="generate_quiz_context",
-            description="Extract course content to prepare a quiz. Use when user asks for quiz/test.",
-            func=_generate_quiz,
-        ),
-        Tool(
-            name="create_study_plan",
-            description="Create revision schedule based on documents. Use when user asks for planning/schedule.",
-            func=_create_plan,
-        ),
-        Tool(
-            name="search_wikipedia",
-            description="Search Wikipedia for general knowledge. Use only if search_course finds nothing.",
-            func=_search_wikipedia,
-        ),
-        # Add python_repl_tool separately (it's already a tool object)
+        search_course,
+        generate_quiz_context,
+        create_study_plan,
+        search_wikipedia,
     ]
 
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
@@ -225,7 +219,6 @@ def main():
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
                 
-                # ✅ CREATE TOOLS HERE (after vectorstore is ready)
                 st.session_state.tools = create_all_tools(
                     vectorstore=st.session_state.vectorstore,
                     doc_previews=st.session_state.doc_previews
@@ -234,7 +227,22 @@ def main():
                 st.success("Prêt !")
     
     # ... rest of sidebar UI ...
-    
+        if st.session_state.vectorstore is not None:
+            st.success("🟢 Mémoire chargée")
+        else:
+            st.warning("🔴 Mémoire vide")
+        
+        if st.session_state.doc_previews:
+            st.markdown("### Fichiers en mémoire :")
+            for f_name in st.session_state.doc_previews.keys():
+                st.caption(f"📄 {f_name}")
+    # Display chat history
+    for msg in st.session_state.messages:
+        if msg.type == "human":
+            st.chat_message("user").write(msg.content)
+        elif msg.type == "ai" and msg.content:
+            st.chat_message("assistant").write(msg.content)
+            
     # Chat input
     user_input = st.chat_input("Votre question...")
     
