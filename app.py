@@ -69,7 +69,8 @@ def search_course(query: str) -> str:
 def search_wikipedia(query: str) -> str:
     """
     Searches for a general definition or historical fact on Wikipedia.
-    Use this tool only for general knowledge concepts not found in the PDF.
+    Use this tool ONLY when asked about general knowledge concepts not found in the PDF.
+    Do NOT used this tool if asked for a quizz.
     1. DO NOT COPY the raw text.
     2. Summarize the answer in 3-4 clear sentences.
     3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
@@ -99,7 +100,8 @@ def search_wikipedia(query: str) -> str:
 def generate_quiz_context(topic: str) -> str:
     """
     Extracts content from the course to prepare a quiz.
-    Use this tool ONLY when the user explicitly asks for a quiz, a test, or an exercise.
+    Use this tool ONLY when the user explicitly asks for a quiz, a test, or an exercise or with a sentence like "Ask me about..."
+
 
     Args:
         topic: The specific keyword (e.g. "Vanishing gradient", "LSTM"). Avoid sentences, use keywords.
