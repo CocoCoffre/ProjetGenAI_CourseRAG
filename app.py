@@ -182,7 +182,11 @@ def main():
     with st.sidebar:
         st.header("Documents")
         files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
-        if st.button("Traiter") and files:
+        
+        # Bouton de traitement
+        process_btn = st.button("Traiter les documents")
+        
+        if process_btn and files:
             with st.spinner("Analyse..."):
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
@@ -190,6 +194,14 @@ def main():
         st.markdown("---")
         st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
 
+        # --- INDICATEUR D'ÉTAT (DEBUG VISUEL) ---
+        if st.session_state.vectorstore is not None:
+            st.success("🟢 Mémoire chargée : L'agent a accès aux cours.")
+            # Petit bonus : Afficher le nombre de "chunks" (morceaux) en mémoire si possible
+            # st.caption(f"{st.session_state.vectorstore.index.ntotal} fragments mémorisés.")
+        else:
+            st.warning("🔴 Mémoire vide : L'agent ne connait pas le cours.")
+            st.caption("👉 Veuillez cliquer sur 'Traiter les documents' ci-dessus.")
     # Affichage de l'historique
     for msg in st.session_state.messages:
         # LangGraph utilise des formats de messages spécifiques, on adapte l'affichage
