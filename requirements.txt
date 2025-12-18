@@ -5,9 +5,11 @@ langchain-core
 langchain-groq
 langchain-huggingface
 langchain-text-splitters
+langchain-experimental
 langgraph
 pypdf
 faiss-cpu
 python-dotenv
 wikipedia
 sentence-transformers
+matplotlib
