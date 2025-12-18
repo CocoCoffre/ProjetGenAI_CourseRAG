@@ -215,7 +215,7 @@ def main():
             temperature=0
         )
         
-        tools = [search_course, search_wikipedia, generate_quiz_context, python_repl_tool]
+        tools = [search_course, search_wikipedia, generate_quiz_context, python_repl_tool, create_study_plan]
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
