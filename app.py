@@ -126,7 +126,32 @@ def generate_quiz_context(topic: str) -> str:
     print(f"DEBUG QUIZ - Topic: {topic} - Chunks found: {len(results)}")
     
     return f"Contenu du cours sur '{topic}' :\n{content}"
-
+    
+@tool
+def create_study_plan(days: int) -> str:
+    """
+    Analyzes the document structure to help generate a revision schedule.
+    Use this tool when the user asks for a 'planning', 'schedule', or 'roadmap'.
+    Args:
+        days: The number of days the user has to study.
+    """
+    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
+        return "Impossible : aucun cours chargé."
+    
+    # Stratégie : On cherche les termes structurels pour comprendre la taille du cours
+    search_queries = ["Sommaire", "Table of contents", "Chapitre", "Introduction", "Conclusion"]
+    structural_content = ""
+    
+    for query in search_queries:
+        results = st.session_state.vectorstore.similarity_search(query, k=2)
+        for doc in results:
+            structural_content += doc.page_content + "\n"
+    
+    # On renvoie la structure brute + l'instruction
+    return (
+        f"Voici un aperçu de la structure du cours (Sommaire/Chapitres) :\n{structural_content[:3000]}\n\n"
+        f"INSTRUCTION POUR L'AGENT : Utilise ces informations pour créer un tableau de révision sur {days} jours."
+    )
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
 python_repl_tool = PythonREPLTool()
@@ -211,7 +236,10 @@ def main():
          "   - If asked to plot/draw: Write python code using matplotlib.\n"
          "   - Save the figure using `plt.savefig('plot.png')`.\n"
          "   - Do not try to show it with plt.show().\n"
-         "6. BEHAVIOR: Be pedagogical, encouraging, and clear.")
+         "6. 'create_study_plan': when user asks for a PLANNING or SCHEDULE.\n"
+         "   - Extract the number of days (default to 3 if not specified).\n"
+         "   - Output a clean MARKDOWN TABLE (Jour | Sujets | Objectifs).\n"
+         "7. BEHAVIOR: Be pedagogical, encouraging, and clear.")
         
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
 
