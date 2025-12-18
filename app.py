@@ -162,23 +162,20 @@ def create_study_plan(days: int, focus: str = "All") -> str:
         days: The number of days the user has to study.
         focus: Specific focus or 'All' to cover all uploaded documents.
     """
-    
     previews = st.session_state.get("doc_previews", {})
     
-    if not previews:
-        return (
-            "Aucun document detecte. Verifiez que vous avez uploade et traite les PDFs."
-        )
-    
-    context_str = "Documents disponibles pour la revision:\n\n"
+    # Just return document info if available
+    context_str = "Documents available:\n\n"
     for filename, preview in previews.items():
-        context_str += f"{filename}\nDebut: {preview[:400]}...\n\n"
+        context_str += f"{filename}\n{preview[:300]}...\n\n"
+    
+    # If no previews, that's OK - LLM knows from system prompt
+    if not context_str or context_str == "Documents available:\n\n":
+        context_str = "No preview available - use documents mentioned in system prompt"
     
     return (
         f"{context_str}\n"
-        f"Cree un planning de revision detaille sur {days} jour(s) en citant les themes principaux "
-        f"de chaque document. Format: tableau Markdown avec colonnes "
-        f"(Jour | Sujets a reviser | Objectifs d'apprentissage)."
+        f"Create a {days}-day study plan with table format: (Jour | Sujets | Objectifs)"
     )
 
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
