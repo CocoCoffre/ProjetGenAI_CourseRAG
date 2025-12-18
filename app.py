@@ -153,25 +153,24 @@ def generate_quiz_context(topic: str) -> str:
 def create_study_plan(days: int, focus: str = "All") -> str:
     """
     Generates a revision schedule based on the ACTUAL filenames and content of uploaded documents.
-    Use this tool when user asks for a planning. It bypasses semantic search to look at file headers directly.
-    
-    Args:
-        days: The number of days the user has to study.
-        focus: Specific focus or 'All' to cover all uploaded documents..
     """
+    # Add defensive check and better error handling
+    if "doc_previews" not in st.session_state:
+        st.session_state.doc_previews = {}
     
-    previews = st.session_state.get("doc_previews", {})
-
+    previews = st.session_state.doc_previews
+    
     if not previews:
-        return "Erreur : Aucun document en mémoire. L'utilisateur doit uploader des PDF."
-
-    context_str = "Voici les documents chargés :\n\n"
+        return "❌ Aucun document en mémoire. Veuillez d'abord uploader et traiter les PDFs."
+    
+    context_str = "📚 Voici les documents chargés :\n\n"
     for filename, preview in previews.items():
-        context_str += f"--- DOC: {filename} ---\nDébut: {preview}\n\n"
+        context_str += f"**{filename}**\n``````\n\n"
     
     return (
         f"{context_str}\n"
-        f"INSTRUCTION : Crée un planning sur {days} jours en citant ces fichiers exacts."
+        f"**INSTRUCTION** : Crée un planning détaillé sur {days} jours en citant ces fichiers exacts, "
+        f"avec une table Markdown (Jour | Sujets à réviser | Objectifs d'apprentissage)."
     )
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
@@ -195,8 +194,7 @@ def main():
         st.session_state.messages = []
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
-    if "doc_previews" not in st.session_state:
-        st.session_state.doc_previews = {} # Initialisation garantie
+    
         
     # Sidebar
     with st.sidebar:
@@ -244,6 +242,8 @@ def main():
         st.chat_message("user").write(user_input)
         st.session_state.messages.append(HumanMessage(content=user_input))
         
+        if "doc_previews" not in st.session_state:
+        st.session_state.doc_previews = {} # Initialisation garantie
         groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
             st.error("Pas de clé API !")
