@@ -16,7 +16,6 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
-from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_community.vectorstores import FAISS
 
 # --- Config ---
@@ -50,15 +49,10 @@ def build_vector_store(documents):
 
 # --- 2. DÉFINITION DES SCHÉMAS  ---
 
-class SearchInput(BaseModel):
-    query: str = Field(description="The exact subject or term to search for.")
-
-class QuizInput(BaseModel):
-    topic: str = Field(description="The specific topic from the course to generate a quiz on.")
 
 # --- 3. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
 
-@tool(args_schema=SearchInput)
+@tool
 def search_course(query: str) -> str:
     """
     Searches for information strictly within the uploaded PDF course documents.
@@ -71,7 +65,7 @@ def search_course(query: str) -> str:
     results = st.session_state.vectorstore.similarity_search(query, k=4)
     return "\n\n".join([doc.page_content for doc in results])
     
-@tool(args_schema=SearchInput)
+@tool
 def search_wikipedia(query: str) -> str:
     """
     Searches for a general definition or historical fact on Wikipedia.
@@ -79,6 +73,9 @@ def search_wikipedia(query: str) -> str:
     1. DO NOT COPY the raw text.
     2. Summarize the answer in 3-4 clear sentences.
     3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
+
+    Args:
+        query: The exact subject or term to search for in JSON format (ex "Vanishing gradient", "Victor Hugo").
     """
     try:
         # Initialisation du retriever
@@ -98,7 +95,7 @@ def search_wikipedia(query: str) -> str:
     except Exception as e:
         return f"Erreur lors de la recherche Wikipedia : {e}"
 
-@tool(args_schema=QuizInput)
+@tool
 def generate_quiz_context(topic: str) -> str:
     """
     Extracts content from the course to prepare a quiz.
