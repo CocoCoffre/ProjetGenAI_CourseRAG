@@ -104,9 +104,21 @@ def generate_quiz_context(topic: str) -> str:
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
         return "Impossible de faire un quiz : aucun cours chargé."
     
-    # On cherche large pour avoir de la matière à question
-    results = st.session_state.vectorstore.similarity_search(topic, k=3)
-    content = "\n".join([doc.page_content for doc in results])
+    retriever = st.session_state.vectorstore.as_retriever(
+        search_type="mmr",
+        search_kwargs={'k': 6, 'fetch_k': 20}
+    )
+    
+    results = retriever.invoke(topic)
+    
+    if not results:
+        return f"Aucune information trouvée dans le cours sur le sujet '{topic}'."
+
+    content = "\n\n".join([doc.page_content for doc in results])
+    
+    # Petit debug (visible dans les logs Streamlit si besoin)
+    print(f"DEBUG QUIZ - Topic: {topic} - Chunks found: {len(results)}")
+    
     return f"Contenu du cours sur '{topic}' :\n{content}"
 
 
@@ -172,9 +184,9 @@ def main():
          "1. LANGUAGE: ALWAYS answer in the same language as the user's question, regardless of the internal reasoning.\n"
          "2. COURSE QUESTIONS: Use 'search_course' to find answers in the PDF. Cite the context if possible.\n"
          "3. DEFINITIONS: Use 'search_wikipedia' for general definitions if the course is not clear enough.\n"
-         "4. QUIZ MODE: If the user asks for a quiz, a test, or to be challenged:\n"
-         "   - Use 'generate_quiz_context' to get material.\n"
-         "   - Generate ONE multiple-choice question (A, B, C) based on that material.\n"
+         "   - EXTRACT the main topic/keyword (e.g. user says 'Quiz on vanishing gradient problem', you extract 'Vanishing gradient').\n"
+         "   - Use 'generate_quiz_context' with that specific keyword.\n"
+         "   - Generate ONE multiple-choice question (A, B, C) based strictly on the retrieved context.\n"
          "   - DO NOT give the answer immediately. Wait for the user to reply.\n"
          "   - Once the user replies, correct them and explain why.\n"
          "5. BEHAVIOR: Be pedagogical, encouraging, and clear.")
