@@ -94,127 +94,96 @@ def check_vectorstore_quality(vectorstore, test_queries):
 
 # --- 3. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
 
-@tool
-def search_course(query: str) -> str:
+def create_all_tools(vectorstore: FAISS, doc_previews: dict):
     """
-    Searches for information strictly within the uploaded PDF course documents.
-    Use this tool to answer questions about the specific course content.
+    Factory function that creates all tools with access to vectorstore and previews.
+    Call this AFTER documents are processed.
     """
-    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
-        return "ERROR: Vectorstore not initialized. No documents loaded."
     
-    print(f"\n[DEBUG search_course]")
-    print(f"  Query: {query}")
-    print(f"  Vectorstore size: {st.session_state.vectorstore.index.ntotal}")
-    
-    try:
-        results = st.session_state.vectorstore.similarity_search(query, k=4)
+    # Tool 1: search_course
+    def _search_course(query: str) -> str:
+        """Searches the course PDFs."""
+        print(f"\n[DEBUG search_course] Query: {query}")
+        results = vectorstore.similarity_search(query, k=4)
         print(f"  Results found: {len(results)}")
         
-        if not results or len(results) == 0:
-            print(f"  No matches for '{query}'")
-            return f"No content found for '{query}' in documents. Try different keywords or check search_wikipedia."
+        if not results:
+            return f"No content found for '{query}' in documents."
         
-        # Format results with source information
         formatted = []
-        for i, doc in enumerate(results, 1):
-            source = doc.metadata.get('source', 'Unknown source')
-            print(f"  Match {i}: {source} - {doc.page_content[:50]}...")
+        for doc in results:
+            source = doc.metadata.get('source', 'Unknown')
             formatted.append(f"[From {source}]\n{doc.page_content}")
         
         return "\n---\n".join(formatted)
     
-    except Exception as e:
-        print(f"  ERROR: {str(e)}")
-        return f"Error searching documents: {str(e)}"
-    
-@tool
-def search_wikipedia(query: str) -> str:
-    """
-    Searches for a general definition or historical fact on Wikipedia.
-    Use this tool ONLY when asked about general knowledge concepts that you cannot found in the PDF.
-    Do NOT used this tool if asked for a quizz.
-    1. DO NOT COPY the raw text.
-    2. Summarize the answer in 3-4 clear sentences.
-    3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
-
-    Args:
-        query: The exact subject or term to search for in JSON format (ex "Vanishing gradient", "Victor Hugo").
-    """
-    try:
-        # Initialisation du retriever
-        retriever = WikipediaRetriever(
-            top_k_results=1,
-            doc_content_chars_max=2000
-        ) 
-        # Invocation
-        docs = retriever.invoke(query)
+    # Tool 2: generate_quiz_context
+    def _generate_quiz(topic: str) -> str:
+        """Extracts course content for quiz generation."""
+        retriever = vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={'k': 6, 'fetch_k': 20}
+        )
+        results = retriever.invoke(topic)
         
-        # Vérification si on a des résultats
-        if not docs:
-            return "Aucun résultat trouvé sur Wikipedia pour cette recherche."
-            
-        return "\n\n".join([doc.page_content for doc in docs])
+        if not results:
+            return f"No information found on '{topic}'."
         
-    except Exception as e:
-        return f"Erreur lors de la recherche Wikipedia : {e}"
-
-@tool
-def generate_quiz_context(topic: str) -> str:
-    """
-    Extracts content from the course to prepare a quiz.
-    Use this tool ONLY when the user explicitly asks for a quiz, a test, or an exercise or with a sentence like "Ask me about..."
-
-
-    Args:
-        topic: The specific keyword (e.g. "Vanishing gradient", "LSTM"). Avoid sentences, use keywords.
+        content = "\n\n".join([doc.page_content for doc in results])
+        return f"Course content on '{topic}':\n{content}"
+    
+    # Tool 3: create_study_plan
+    def _create_plan(days: int, focus: str = "All") -> str:
+        """Creates study plan based on documents."""
+        context_str = "Documents available:\n\n"
+        for filename, preview in doc_previews.items():
+            context_str += f"{filename}\n{preview[:300]}...\n\n"
         
-    """
-    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
-        return "Impossible de faire un quiz : aucun cours chargé."
+        if not context_str or context_str == "Documents available:\n\n":
+            context_str = "No preview available"
+        
+        return (
+            f"{context_str}\n"
+            f"Create a {days}-day study plan with table: (Jour | Sujets | Objectifs)"
+        )
     
-    retriever = st.session_state.vectorstore.as_retriever(
-        search_type="mmr",
-        search_kwargs={'k': 6, 'fetch_k': 20}
-    )
+    # Tool 4: search_wikipedia (doesn't need vectorstore)
+    def _search_wikipedia(query: str) -> str:
+        """Searches Wikipedia for general knowledge."""
+        try:
+            from langchain_community.retrievers import WikipediaRetriever
+            retriever = WikipediaRetriever(top_k_results=1, doc_content_chars_max=2000)
+            docs = retriever.invoke(query)
+            if not docs:
+                return "No Wikipedia results found."
+            return "\n\n".join([doc.page_content for doc in docs])
+        except Exception as e:
+            return f"Wikipedia search error: {e}"
     
-    results = retriever.invoke(topic)
-    
-    if not results:
-        return f"Aucune information trouvée dans le cours sur le sujet '{topic}'."
-
-    content = "\n\n".join([doc.page_content for doc in results])
-    
-    # Petit debug (visible dans les logs Streamlit si besoin)
-    print(f"DEBUG QUIZ - Topic: {topic} - Chunks found: {len(results)}")
-    
-    return f"Contenu du cours sur '{topic}' :\n{content}"
-
-@tool
-def create_study_plan(days: int, focus: str = "All") -> str:
-    """
-    Generates a revision schedule based on the uploaded documents.
-    The LLM already knows which documents are available from the system prompt.
-    
-    Args:
-        days: The number of days the user has to study.
-        focus: Specific focus or 'All' to cover all uploaded documents.
-    """
-    previews = st.session_state.get("doc_previews", {})
-    
-    # Just return document info if available
-    context_str = "Documents available:\n\n"
-    for filename, preview in previews.items():
-        context_str += f"{filename}\n{preview[:300]}...\n\n"
-    
-    # If no previews, that's OK - LLM knows from system prompt
-    if not context_str or context_str == "Documents available:\n\n":
-        context_str = "No preview available - use documents mentioned in system prompt"
-    
-    return (
-        f"{context_str}\n"
-        f"Create a {days}-day study plan with table format: (Jour | Sujets | Objectifs)"
-    )
+    # Return all tools as a list
+    return [
+        Tool(
+            name="search_course",
+            description="Search uploaded PDF course documents for information.",
+            func=_search_course,
+        ),
+        Tool(
+            name="generate_quiz_context",
+            description="Extract course content to prepare a quiz. Use when user asks for quiz/test.",
+            func=_generate_quiz,
+        ),
+        Tool(
+            name="create_study_plan",
+            description="Create revision schedule based on documents. Use when user asks for planning/schedule.",
+            func=_create_plan,
+        ),
+        Tool(
+            name="search_wikipedia",
+            description="Search Wikipedia for general knowledge. Use only if search_course finds nothing.",
+            func=_search_wikipedia,
+        ),
+        # Add python_repl_tool separately (it's already a tool object)
+    ]
 
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
@@ -233,187 +202,98 @@ python_repl_tool.description = (
 def main():
     st.title("🤖 Agent Étudiant")
     
-    # --- INITIALISATION ROBUSTE ---
+    # Initialize session state
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
     if "doc_previews" not in st.session_state:
         st.session_state.doc_previews = {}
-        
+    if "tools" not in st.session_state:  # ← NEW: Store tools here
+        st.session_state.tools = None
+    
     # Sidebar
     with st.sidebar:
         st.header("Documents")
         files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
         
         process_btn = st.button("Traiter les documents")
-           
+        
         if process_btn and files:
             with st.spinner("Analyse..."):
+                # Process documents
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
-                st.success("Prêt !")
-                # Check vectorstore quality
-                check_vectorstore_quality(
-                    st.session_state.vectorstore,
-                    ["LSTM", "gradient", "neurone", "apprentissage"]
+                
+                # ✅ CREATE TOOLS HERE (after vectorstore is ready)
+                st.session_state.tools = create_all_tools(
+                    vectorstore=st.session_state.vectorstore,
+                    doc_previews=st.session_state.doc_previews
                 )
-        
-                st.success("Pret !")
-        st.markdown("---")
-        st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
-        
-        if st.session_state.vectorstore is not None:
-            st.success("🟢 Mémoire chargée : L'agent a accès aux cours.")
-        else:
-            st.warning("🔴 Mémoire vide : L'agent ne connait pas le cours.")
-            st.caption("👉 Veuillez cliquer sur 'Traiter les documents' ci-dessus.")
-            
-        if "doc_previews" in st.session_state and st.session_state.doc_previews:
-            st.markdown("### Fichiers en mémoire :")
-            for f_name in st.session_state.doc_previews.keys():
-                st.caption(f"📄 {f_name}")
+                
+                st.success("Prêt !")
     
-    # Affichage de l'historique
-    for msg in st.session_state.messages:
-        if msg.type == "human":
-            st.chat_message("user").write(msg.content)
-        elif msg.type == "ai" and msg.content:
-            st.chat_message("assistant").write(msg.content)
-
-    # Chat
+    # ... rest of sidebar UI ...
+    
+    # Chat input
     user_input = st.chat_input("Votre question...")
-
+    
     if user_input:
         st.chat_message("user").write(user_input)
         st.session_state.messages.append(HumanMessage(content=user_input))
         
+        # Check if tools are ready
+        if st.session_state.tools is None:
+            st.error("Veuillez d'abord uploader et traiter des documents!")
+            st.stop()
+        
+        # Get API key
         groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
             st.error("Pas de clé API !")
             st.stop()
-
+        
         llm = ChatGroq(
-            groq_api_key=groq_api_key, 
+            groq_api_key=groq_api_key,
             model_name="qwen/qwen3-32b",
             temperature=0
         )
         
-        # ✅ KEY FIX: Extract doc_previews NOW, before creating agent
-        current_doc_previews = st.session_state.get("doc_previews", {})
+        # ✅ Use the tools from session state
+        from langchain_experimental.tools import PythonREPLTool
+        python_repl = PythonREPLTool()
+        python_repl.name = "python_interpreter"
+        python_repl.description = "Execute Python code for calculations."
         
-        tools = [
-            search_course, 
-            search_wikipedia, 
-            generate_quiz_context, 
-            python_repl_tool, 
-            create_study_plan  # This will use the current_doc_previews from closure
-        ]
-
-        # ✅ Include current documents in the system prompt
+        tools = st.session_state.tools + [python_repl]
+        
+        # Build system prompt
         docs_context = ""
-        if current_doc_previews:
+        if st.session_state.doc_previews:
             docs_context = "\n\n**DOCUMENTS CHARGÉS:**\n"
-            for filename in current_doc_previews.keys():
+            for filename in st.session_state.doc_previews.keys():
                 docs_context += f"- {filename}\n"
-        else:
-            docs_context = "\n\n**IMPORTANT: Aucun document n'est chargé pour le moment.**"
         
         system_prompt = (
-    "You are an intelligent and helpful Private Tutor named 'Professeur IA'.\n"
-    "Your goal is to help students learn based on their course documents.\n"
-    f"{docs_context}\n\n"
-    
-    "🧠 **CHAIN OF THOUGHT (CoT) - Your Reasoning Technique**\n"
-    "ALWAYS structure your responses in these 4 steps:\n"
-    "1. **Pensée** (Thought): Analyze what the user is asking\n"
-    "2. **Action** (Action): Decide which tool(s) to use and why\n"
-    "3. **Observation** (Observation): Show what you found/computed\n"
-    "4. **Réponse** (Response): Give your final answer\n\n"
-    
-    "**DETAILED TASK INSTRUCTIONS:**\n\n"
-    
-    "📚 FOR COURSE QUESTIONS:\n"
-    "  - Pensée: 'Is this question about the uploaded PDFs or general knowledge?'\n"
-    "  - Action: 'I will use search_course first. If not found, I'll use search_wikipedia.'\n"
-    "  - Observation: [Show what was found from each source]\n"
-    "  - Réponse: Clear answer with source citations\n\n"
-    
-    "❓ FOR QUIZ/TEST REQUESTS (user says 'quiz me', 'test me', 'ask me about'):\n"
-    "  - Pensée: 'Extract the specific topic. User wants to be tested, not given answers.'\n"
-    "  - Action: 'I will use generate_quiz_context to extract course material.'\n"
-    "  - Observation: [Show the retrieved content]\n"
-    "  - Réponse: Generate ONE multiple-choice question (A, B, C) - NEVER give the answer immediately\n"
-    "            Wait for user's attempt, then explain why their answer was right/wrong\n\n"
-    
-    "📅 FOR STUDY PLANNING (user asks for 'planning', 'schedule', 'révision'):\n"
-    "  - Pensée: 'How many days does the user have? I need to analyze course structure.'\n"
-    "  - Action: 'I will use create_study_plan to organize revision by topic and time.'\n"
-    "  - Observation: [Show the document analysis]\n"
-    "  - Réponse: Markdown table with columns: (Jour | Sujets à réviser | Objectifs d'apprentissage)\n\n"
-    
-    "🔢 FOR MATH/LOGIC/PROGRAMMING PROBLEMS:\n"
-    "  - Pensée: 'What type of problem? What approach?'\n"
-    "  - Action: 'I will use python_interpreter to compute/execute.'\n"
-    "  - Observation: [Show computation result]\n"
-    "  - Réponse: Solution with step-by-step working shown\n\n"
-    
-    "📖 FOR DEFINITIONS/CONCEPTS NOT IN COURSE:\n"
-    "  - Pensée: 'User asks about a concept. Is it in the PDF or is it general knowledge?'\n"
-    "  - Action: 'First try search_course, if not found then search_wikipedia.'\n"
-    "  - Observation: [Show what was found]\n"
-    "  - Réponse: Clear definition with context\n\n"
-    
-    "**UNIVERSAL RULES:**\n"
-    "- ALWAYS show the 🧠 Pensée → Action → Observation → Réponse structure\n"
-    "- ALWAYS respond in the same language as the user (French or English)\n"
-    "- For quizzes: NEVER give the answer immediately - make user think first\n"
-    "- Citations: Always cite your sources when providing information\n"
-    "- Format: Use markdown for clarity (bold, bullets, tables)\n"
-    "- Pedagogy: Be encouraging, guide learning, ask clarifying questions\n"
-    "- Quality: Make reasoning explicit so user understands HOW you think\n"
-)
+            "You are Professeur IA, a helpful tutor.\n"
+            f"{docs_context}\n\n"
+            "MANDATORY RULES:\n"
+            "1. Always use search_course FIRST before search_wikipedia\n"
+            "2. Show Chain of Thought: Pensée → Action → Observation → Réponse\n"
+            "3. Never skip search_course!\n"
+        )
         
+        # Create agent with tools
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
-
-        inputs = {"messages": st.session_state.messages}
         
+        # Run agent
         with st.chat_message("assistant"):
             with st.spinner("Réflexion..."):
                 try:
-                    response = agent_graph.invoke(inputs)
-                    full_history = response["messages"]
-                    final_answer = full_history[-1].content
-                    
+                    response = agent_graph.invoke({"messages": st.session_state.messages})
+                    final_answer = response["messages"][-1].content
                     st.write(final_answer)
-    
-                    if os.path.exists("plot.png"):
-                        st.image("plot.png", caption="Graphique généré par l'Agent")
-                        os.remove("plot.png")
-                    
-                    # Debug
-                    last_human_index = -1
-                    for i, msg in enumerate(full_history):
-                        if isinstance(msg, HumanMessage):
-                            last_human_index = i
-                    
-                    used_tools = []
-                    if last_human_index != -1:
-                        for msg in full_history[last_human_index:]:
-                            if isinstance(msg, AIMessage) and msg.tool_calls:
-                                for tool_call in msg.tool_calls:
-                                    used_tools.append(tool_call['name'])
-                    
-                    if used_tools:
-                        unique_tools = list(set(used_tools))
-                        with st.expander("🕵️‍♂️ Debug : Voir les outils utilisés", expanded=True):
-                            st.write(f"Pour répondre, l'agent a utilisé : **{', '.join(unique_tools)}**")
-                    else:
-                        with st.expander("🕵️‍♂️ Debug", expanded=False):
-                            st.write("L'agent a répondu directement (sans outils).")
-                            
-                    st.session_state.messages = full_history
-                    
+                    st.session_state.messages = response["messages"]
                 except Exception as e:
                     st.error(f"Erreur: {e}")
 
