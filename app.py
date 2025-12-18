@@ -264,11 +264,35 @@ def main():
                     
                     # 4. AFFICHER LA REPONSE
                     st.write(final_answer)
-
+    
                     if os.path.exists("plot.png"):
                         st.image("plot.png", caption="Graphique généré par l'Agent")
                         os.remove("plot.png") # Nettoyage
-                    # 5. METTRE A JOUR LA MEMOIRE DE SESSION
+                    # 5. DEBUGGING
+                    last_human_index = -1
+                    for i, msg in enumerate(full_history):
+                        if isinstance(msg, HumanMessage):
+                            last_human_index = i
+                    
+                    # 2. On scanne les messages suivants à la recherche d'appels d'outils
+                    used_tools = []
+                    if last_human_index != -1:
+                        for msg in full_history[last_human_index:]:
+                            if isinstance(msg, AIMessage) and msg.tool_calls:
+                                for tool_call in msg.tool_calls:
+                                    used_tools.append(tool_call['name'])
+                    
+                    # 3. Affichage visuel
+                    if used_tools:
+                        # set() pour éviter les doublons si l'outil est appelé 2 fois
+                        unique_tools = list(set(used_tools))
+                        with st.expander("🕵️‍♂️ Debug : Voir les outils utilisés", expanded=True):
+                            st.write(f"Pour répondre, l'agent a utilisé : **{', '.join(unique_tools)}**")
+                    else:
+                        with st.expander("🕵️‍♂️ Debug", expanded=False):
+                            st.write("L'agent a répondu directement (sans outils).")
+                            
+                    # 6. METTRE A JOUR LA MEMOIRE DE SESSION
                     # On remplace l'historique par celui retourné par l'agent (qui contient les traces des outils)
                     st.session_state.messages = full_history
                     
