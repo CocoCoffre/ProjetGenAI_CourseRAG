@@ -194,15 +194,14 @@ python_repl_tool.description = (
 # --- 4. APPLICATION ---
 
 def main():
-     # ✨ CUSTOM CSS - Design complet personnalisé
+    # ✨ CUSTOM CSS - Design lisible et moderne
     st.markdown("""
     <style>
-    /* ===== RESET STREAMLIT BASE ===== */
+    /* ===== RESET STREAMLIT ===== */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    /* Supprimer le padding par défaut */
     .block-container {
         padding-top: 1rem;
         padding-bottom: 0rem;
@@ -211,47 +210,77 @@ def main():
         max-width: 100%;
     }
     
-    /* ===== FOND & COULEURS ===== */
+    /* ===== FOND PRINCIPAL ===== */
     .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* ===== SIDEBAR CUSTOM ===== */
+    /* ===== SIDEBAR - Fond BLANC ===== */
     [data-testid="stSidebar"] {
-        background: rgba(255, 255, 255, 0.95);
+        background: white !important;
         border-right: 3px solid #667eea;
         box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: #2d3748 !important;
     }
     
     [data-testid="stSidebar"] h1, 
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3 {
-        color: #667eea;
-        font-weight: 700;
+        color: #667eea !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Success badge dans sidebar */
+    [data-testid="stSidebar"] .stSuccess {
+        background: #48bb78 !important;
+        color: white !important;
+        border-radius: 10px !important;
+        padding: 0.5rem 1rem !important;
+    }
+    
+    [data-testid="stSidebar"] .stWarning {
+        background: #f56565 !important;
+        color: white !important;
+        border-radius: 10px !important;
+        padding: 0.5rem 1rem !important;
     }
     
     /* ===== TITRE PRINCIPAL ===== */
-    h1 {
+    .custom-title {
+        text-align: center;
+        padding: 2rem;
+        background: white;
+        border-radius: 20px;
+        margin-bottom: 2rem;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .custom-title h1 {
         background: linear-gradient(90deg, #667eea, #764ba2);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-size: 3rem !important;
         font-weight: 900 !important;
-        text-align: center;
-        padding: 1.5rem 0;
-        margin-bottom: 2rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        margin: 0 !important;
     }
     
-    /* ===== CONTAINER CHAT ===== */
+    .custom-subtitle {
+        color: #667eea;
+        font-size: 1.2rem;
+        margin-top: 0.5rem;
+        font-weight: 600;
+    }
+    
+    /* ===== MESSAGES CHAT ===== */
     .stChatMessage {
-        background: rgba(255, 255, 255, 0.95) !important;
+        background: white !important;
         border-radius: 20px !important;
         padding: 1.5rem !important;
         margin: 1rem 0 !important;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
-        border: 2px solid transparent !important;
         transition: all 0.3s ease !important;
     }
     
@@ -260,30 +289,36 @@ def main():
         box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
     }
     
-    /* Message utilisateur */
-    [data-testid="stChatMessageContent"] {
-        background: transparent !important;
-    }
-    
+    /* Message UTILISATEUR - Fond gradient, texte BLANC */
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
         border: none !important;
     }
     
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) p {
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) * {
         color: white !important;
     }
     
-    /* Message assistant */
+    /* Message ASSISTANT - Fond blanc, texte NOIR */
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) {
-        background: rgba(255, 255, 255, 0.95) !important;
+        background: white !important;
         border: 2px solid #667eea !important;
+    }
+    
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) * {
+        color: #2d3748 !important;
+    }
+    
+    /* Emojis dans les messages assistant */
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h1,
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h2,
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h3 {
+        color: #667eea !important;
     }
     
     /* ===== INPUT CHAT ===== */
     .stChatInputContainer {
-        background: rgba(255, 255, 255, 0.95) !important;
+        background: white !important;
         border-radius: 25px !important;
         padding: 1rem !important;
         box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
@@ -292,15 +327,21 @@ def main():
     
     .stChatInputContainer textarea {
         background: white !important;
+        color: #2d3748 !important;
         border-radius: 20px !important;
-        border: 2px solid #e0e0e0 !important;
+        border: 2px solid #e2e8f0 !important;
         padding: 1rem !important;
         font-size: 1rem !important;
     }
     
     .stChatInputContainer textarea:focus {
         border-color: #667eea !important;
-        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2) !important;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
+    }
+    
+    /* Placeholder text */
+    .stChatInputContainer textarea::placeholder {
+        color: #a0aec0 !important;
     }
     
     /* ===== BOUTONS ===== */
@@ -322,10 +363,6 @@ def main():
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
     }
     
-    .stButton > button:active {
-        transform: translateY(-1px) !important;
-    }
-    
     /* ===== FILE UPLOADER ===== */
     [data-testid="stFileUploader"] {
         background: white !important;
@@ -339,37 +376,9 @@ def main():
         font-weight: 600 !important;
     }
     
-    /* ===== SUCCESS/WARNING/ERROR ===== */
-    .stSuccess {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
-        color: white !important;
-        border-radius: 15px !important;
-        padding: 1rem !important;
-        border: none !important;
-        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3) !important;
-    }
-    
-    .stWarning {
-        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
-        color: white !important;
-        border-radius: 15px !important;
-        padding: 1rem !important;
-        border: none !important;
-        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3) !important;
-    }
-    
-    .stError {
-        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
-        color: white !important;
-        border-radius: 15px !important;
-        padding: 1rem !important;
-        border: none !important;
-        box-shadow: 0 4px 15px rgba(250, 112, 154, 0.3) !important;
-    }
-    
     /* ===== EXPANDER (DEBUG) ===== */
     .streamlit-expanderHeader {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: #667eea !important;
         color: white !important;
         border-radius: 15px !important;
         font-weight: 600 !important;
@@ -377,58 +386,63 @@ def main():
     }
     
     .streamlit-expanderContent {
-        background: rgba(255, 255, 255, 0.95) !important;
+        background: white !important;
+        color: #2d3748 !important;
         border-radius: 0 0 15px 15px !important;
         border: 2px solid #667eea !important;
         border-top: none !important;
+        padding: 1rem !important;
     }
     
-    /* ===== MARKDOWN STYLING ===== */
-    .stMarkdown h2 {
-        color: #667eea !important;
-        font-weight: 700 !important;
-        margin-top: 2rem !important;
-    }
-    
-    .stMarkdown h3 {
-        color: #764ba2 !important;
-        font-weight: 600 !important;
-    }
-    
-    .stMarkdown code {
-        background: rgba(102, 126, 234, 0.1) !important;
+    /* ===== CODE BLOCKS ===== */
+    code {
+        background: #f7fafc !important;
         color: #667eea !important;
         padding: 0.2rem 0.5rem !important;
         border-radius: 5px !important;
+        border: 1px solid #e2e8f0 !important;
+    }
+    
+    pre {
+        background: #f7fafc !important;
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 10px !important;
+        padding: 1rem !important;
+    }
+    
+    pre code {
+        color: #2d3748 !important;
+    }
+    
+    /* ===== TABLES ===== */
+    table {
+        background: white !important;
+        border-radius: 10px !important;
+        overflow: hidden !important;
+    }
+    
+    thead tr {
+        background: #667eea !important;
+    }
+    
+    thead th {
+        color: white !important;
+        font-weight: 600 !important;
+        padding: 1rem !important;
+    }
+    
+    tbody tr {
+        border-bottom: 1px solid #e2e8f0 !important;
+    }
+    
+    tbody td {
+        color: #2d3748 !important;
+        padding: 0.75rem 1rem !important;
     }
     
     /* ===== SPINNER ===== */
     .stSpinner > div {
         border-top-color: #667eea !important;
-    }
-    
-    /* ===== CAPTIONS ===== */
-    .stCaption {
-        color: #764ba2 !important;
-        font-weight: 500 !important;
-    }
-    
-    /* ===== DIVIDER ===== */
-    hr {
-        border: none !important;
-        height: 2px !important;
-        background: linear-gradient(90deg, transparent, #667eea, transparent) !important;
-        margin: 2rem 0 !important;
-    }
-    
-    /* ===== ANIMATIONS ===== */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    .stChatMessage {
-        animation: fadeIn 0.5s ease-out;
     }
     
     /* ===== SCROLLBAR ===== */
@@ -445,35 +459,48 @@ def main():
         border-radius: 10px;
     }
     
-    ::-webkit-scrollbar-thumb:hover {
-        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    /* ===== ANIMATIONS ===== */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
     }
     
-    /* ===== TITRE AVEC EMOJI ===== */
-    .custom-title {
-        text-align: center;
-        padding: 2rem 0;
-        background: rgba(255, 255, 255, 0.95);
-        border-radius: 25px;
-        margin-bottom: 2rem;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    .stChatMessage {
+        animation: fadeIn 0.5s ease-out;
     }
     
-    .custom-title h1 {
-        margin: 0 !important;
-        padding: 0 !important;
+    /* ===== MARKDOWN HEADINGS ===== */
+    .stMarkdown h2 {
+        color: #667eea !important;
+        font-weight: 700 !important;
+        margin-top: 1.5rem !important;
     }
     
-    .custom-subtitle {
-        color: #764ba2;
-        font-size: 1.2rem;
-        margin-top: 0.5rem;
-        font-weight: 500;
+    .stMarkdown h3 {
+        color: #764ba2 !important;
+        font-weight: 600 !important;
+    }
+    
+    /* ===== LISTE À PUCES ===== */
+    .stMarkdown ul {
+        color: #2d3748 !important;
+    }
+    
+    .stMarkdown li {
+        margin: 0.5rem 0 !important;
+    }
+    
+    /* ===== DIVIDER ===== */
+    hr {
+        border: none !important;
+        height: 2px !important;
+        background: linear-gradient(90deg, transparent, #667eea, transparent) !important;
+        margin: 2rem 0 !important;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # ✨ TITRE CUSTOM AVEC HTML
+    # ✨ TITRE CUSTOM
     st.markdown("""
     <div class="custom-title">
         <h1>🤖 Professeur IA</h1>
