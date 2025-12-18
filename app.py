@@ -47,13 +47,21 @@ def build_vector_store(documents):
     vectorstore = FAISS.from_documents(splits, embeddings)
     return vectorstore
 
-# --- 2. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
+# --- 2. DÉFINITION DES SCHÉMAS  ---
 
-@tool
+class SearchInput(BaseModel):
+    query: str = Field(description="The exact subject or term to search for.")
+
+class QuizInput(BaseModel):
+    topic: str = Field(description="The specific topic from the course to generate a quiz on.")
+
+# --- 3. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
+
+@tool(args_schema=SearchInput)
 def search_course(query: str) -> str:
     """
-    Recherche des informations dans le cours PDF.
-    Utilise cet outil pour répondre aux questions sur le contenu des documents.
+    Searches for information strictly within the uploaded PDF course documents.
+    Use this tool to answer questions about the specific course content.
     """
     if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
         return "Aucun document n'est chargé."
@@ -62,16 +70,14 @@ def search_course(query: str) -> str:
     results = st.session_state.vectorstore.similarity_search(query, k=4)
     return "\n\n".join([doc.page_content for doc in results])
     
-@tool
+@tool(args_schema=SearchInput)
 def search_wikipedia(query: str) -> str:
     """
-    Perform a search on Wikipedia when user ask you explicitly for a definition.
-    Use this tool only if 'definition' is present in user's request.
+    Searches for a general definition or historical fact on Wikipedia.
+    Use this tool only for general knowledge concepts not found in the PDF.
     1. DO NOT COPY the raw text.
     2. Summarize the answer in 3-4 clear sentences.
     3. CLEANES mathematical formulas (removes LaTeX tags like 'displaystyle').
-    Args:
-        query: The exact subject or term to search for in JSON format (ex "Vanishing gradient", "Victor Hugo").
     """
     try:
         # Initialisation du retriever
@@ -79,9 +85,6 @@ def search_wikipedia(query: str) -> str:
             top_k_results=1,
             doc_content_chars_max=2000
         ) 
-        
-        
-        
         # Invocation
         docs = retriever.invoke(query)
         
@@ -93,7 +96,22 @@ def search_wikipedia(query: str) -> str:
         
     except Exception as e:
         return f"Erreur lors de la recherche Wikipedia : {e}"
-        
+
+@tool(args_schema=QuizInput)
+def generate_quiz_context(topic: str) -> str:
+    """
+    Extracts content from the course to prepare a quiz.
+    Use this tool ONLY when the user explicitly asks for a quiz, a test, or an exercise.
+    """
+    if "vectorstore" not in st.session_state or st.session_state.vectorstore is None:
+        return "Impossible de faire un quiz : aucun cours chargé."
+    
+    # On cherche large pour avoir de la matière à question
+    results = st.session_state.vectorstore.similarity_search(topic, k=3)
+    content = "\n".join([doc.page_content for doc in results])
+    return f"Contenu du cours sur '{topic}' :\n{content}"
+
+
 # --- 3. APPLICATION ---
 
 def main():
@@ -145,15 +163,24 @@ def main():
             temperature=0
         )
         
-        tools = [search_course, search_wikipedia]
+        tools = [search_course, search_wikipedia, generate_quiz_context]
 
         # 3. Création de l'Agent (Syntaxe exacte create_agent)
         # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
         system_prompt = (
-            "You are a student assistant."
-            "If you cannot answer using a tool, say: 'I cannot answer, this is beyond my capabilities'."
-            "Choose the correct tool to answer. If it's in the course, use search_course."
-            "Use search_wikipedia only If the word 'definition' is present in user's request"
+            "system", 
+             "You are an intelligent and helpful Private Tutor named 'Professeur IA'.\n"
+             "Your goal is to help students learn based on their course documents.\n\n"
+             "RULES:\n"
+             "1. LANGUAGE: ALWAYS answer in the same language of the last user's message, regardless of the internal reasoning.\n"
+             "2. COURSE QUESTIONS: Use 'search_course' to find answers in the PDF. Cite the context if possible.\n"
+             "3. DEFINITIONS: Use 'search_wikipedia' for general definitions if the course is not clear enough.\n"
+             "4. QUIZ MODE: If the user asks for a quiz, a test, or to be challenged:\n"
+             "   - Use 'generate_quiz_context' to get material.\n"
+             "   - Generate ONE multiple-choice question (A, B, C) based on that material.\n"
+             "   - DO NOT give the answer immediately. Wait for the user to reply.\n"
+             "   - Once the user replies, correct them and explain why.\n"
+             "5. BEHAVIOR: Be pedagogical, encouraging, and clear."),
         )
         
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
