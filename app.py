@@ -148,30 +148,41 @@ def generate_quiz_context(topic: str) -> str:
     print(f"DEBUG QUIZ - Topic: {topic} - Chunks found: {len(results)}")
     
     return f"Contenu du cours sur '{topic}' :\n{content}"
-    
+
 @tool
 def create_study_plan(days: int, focus: str = "All") -> str:
     """
-    Generates a revision schedule based on the ACTUAL filenames and content of uploaded documents.
-    """
-    # Add defensive check and better error handling
-    if "doc_previews" not in st.session_state:
-        st.session_state.doc_previews = {}
+    Generates a revision schedule based on the uploaded documents.
+    The LLM already knows which documents are available from the system prompt.
     
-    previews = st.session_state.doc_previews
+    Args:
+        days: The number of days the user has to study.
+        focus: Specific focus or 'All' to cover all uploaded documents.
+    """
+    
+    # Try to access from session state as fallback
+    previews = st.session_state.get("doc_previews", {})
     
     if not previews:
-        return "❌ Aucun document en mémoire. Veuillez d'abord uploader et traiter les PDFs."
+        return (
+            "❌ Aucun document détecté. Vérifiez que vous avez uploadé et traité les PDFs.\n"
+            "L'agent a reçu la liste des fichiers disponibles dans le contexte système, "
+            "mais les données de prévisualisation ne sont pas accessibles."
+        )
     
-    context_str = "📚 Voici les documents chargés :\n\n"
+    context_str = "📚 **Documents disponibles pour la révision :**\n\n"
     for filename, preview in previews.items():
-        context_str += f"**{filename}**\n``````\n\n"
+        # Show first 400 chars of each document
+        context_str += f"**📖 {filename}**\n``````\n\n"
     
     return (
         f"{context_str}\n"
-        f"**INSTRUCTION** : Crée un planning détaillé sur {days} jours en citant ces fichiers exacts, "
-        f"avec une table Markdown (Jour | Sujets à réviser | Objectifs d'apprentissage)."
+        f"**INSTRUCTION POUR L'AGENT :**\n"
+        f"Crée un planning de révision détaillé sur **{days} jour(s)** en citant les thèmes principaux "
+        f"de chaque document. Format obligatoire : tableau Markdown avec colonnes "
+        f"(Jour | Sujets à réviser | Objectifs d'apprentissage)."
     )
+
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
 # On instancie l'outil officiel
 python_repl_tool = PythonREPLTool()
@@ -189,19 +200,19 @@ python_repl_tool.description = (
 def main():
     st.title("🤖 Agent Étudiant")
     
-    # --- INITIALISATION ROBUSTE (Tout en haut) ---
+    # --- INITIALISATION ROBUSTE ---
     if "messages" not in st.session_state:
         st.session_state.messages = []
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
-    
+    if "doc_previews" not in st.session_state:
+        st.session_state.doc_previews = {}
         
     # Sidebar
     with st.sidebar:
         st.header("Documents")
         files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
         
-        # Bouton de traitement
         process_btn = st.button("Traiter les documents")
         
         if process_btn and files:
@@ -209,111 +220,101 @@ def main():
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
                 st.success("Prêt !")
+        
         st.markdown("---")
         st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
         
-        # --- INDICATEUR D'ÉTAT (DEBUG VISUEL) ---
         if st.session_state.vectorstore is not None:
             st.success("🟢 Mémoire chargée : L'agent a accès aux cours.")
-            # Petit bonus : Afficher le nombre de "chunks" (morceaux) en mémoire si possible
-            # st.caption(f"{st.session_state.vectorstore.index.ntotal} fragments mémorisés.")
         else:
             st.warning("🔴 Mémoire vide : L'agent ne connait pas le cours.")
             st.caption("👉 Veuillez cliquer sur 'Traiter les documents' ci-dessus.")
             
-        # Affichage des fichiers détectés
         if "doc_previews" in st.session_state and st.session_state.doc_previews:
             st.markdown("### Fichiers en mémoire :")
             for f_name in st.session_state.doc_previews.keys():
                 st.caption(f"📄 {f_name}")
+    
     # Affichage de l'historique
     for msg in st.session_state.messages:
-        # LangGraph utilise des formats de messages spécifiques, on adapte l'affichage
         if msg.type == "human":
             st.chat_message("user").write(msg.content)
-        elif msg.type == "ai" and msg.content: # On n'affiche que les réponses AI textuelles
+        elif msg.type == "ai" and msg.content:
             st.chat_message("assistant").write(msg.content)
 
     # Chat
     user_input = st.chat_input("Votre question...")
 
     if user_input:
-        # 1. Affichage User
         st.chat_message("user").write(user_input)
         st.session_state.messages.append(HumanMessage(content=user_input))
         
-        if "doc_previews" not in st.session_state:
-            st.session_state.doc_previews = {} # Initialisation garantie
         groq_api_key = st.secrets.get("GROQ_API_KEY")
         if not groq_api_key:
             st.error("Pas de clé API !")
             st.stop()
 
-        # 2. Configuration Agent
         llm = ChatGroq(
             groq_api_key=groq_api_key, 
             model_name="qwen/qwen3-32b",
             temperature=0
         )
         
-        tools = [search_course, search_wikipedia, generate_quiz_context, python_repl_tool, create_study_plan]
+        # ✅ KEY FIX: Extract doc_previews NOW, before creating agent
+        current_doc_previews = st.session_state.get("doc_previews", {})
+        
+        tools = [
+            search_course, 
+            search_wikipedia, 
+            generate_quiz_context, 
+            python_repl_tool, 
+            create_study_plan  # This will use the current_doc_previews from closure
+        ]
 
-        # 3. Création de l'Agent (Syntaxe exacte create_agent)
-        # Note: Dans la doc, checkpointer=None par défaut pour un agent stateless
+        # ✅ Include current documents in the system prompt
+        docs_context = ""
+        if current_doc_previews:
+            docs_context = "\n\n**DOCUMENTS CHARGÉS:**\n"
+            for filename in current_doc_previews.keys():
+                docs_context += f"- {filename}\n"
+        else:
+            docs_context = "\n\n**IMPORTANT: Aucun document n'est chargé pour le moment.**"
+        
         system_prompt = (
-         "You are an intelligent and helpful Private Tutor named 'Professeur IA'.\n"
-         "Your goal is to help students learn based on their course documents.\n\n"
+         f"You are an intelligent and helpful Private Tutor named 'Professeur IA'.\n"
+         f"Your goal is to help students learn based on their course documents.{docs_context}\n\n"
          "RULES:\n"
-         "1. LANGUAGE: ALWAYS answer in the same language as the user's question, regardless of the internal reasoning.\n"
-         "2. COURSE QUESTIONS: Use 'search_course' to find answers in the PDF. Cite the context if possible.\n"
-         "3. DEFINITIONS: Use 'search_wikipedia' for general definitions if you cannot find the answer in the PDF files.\n"
-         "   - EXTRACT the main topic/keyword (e.g. user says 'Quiz on vanishing gradient problem', you extract 'Vanishing gradient').\n"
-         "   - Use 'generate_quiz_context' with that specific keyword.\n"
-         "   - Generate ONE multiple-choice question (A, B, C) based strictly on the retrieved context.\n"
-         "   - DO NOT give the answer immediately. Wait for the user to reply.\n"
-         "   - Once the user replies, correct them and explain why.\n"
-         "4. 'generate_quiz_context' for quizzes ('ask me about...').\n"
-         "5. 'python_interpreter' for MATHS, LOGIC, or PLOTTING.\n"
-         "   - If asked to plot/draw: Write python code using matplotlib.\n"
-         "   - Save the figure using `plt.savefig('plot.png')`.\n"
-         "   - Do not try to show it with plt.show().\n"
-         "6. 'create_study_plan': when user asks for a PLANNING or SCHEDULE.\n"
-         "   - Extract the number of days (default to 3 if not specified).\n"
-         "   - Output a clean MARKDOWN TABLE (Jour | Sujets | Objectifs).\n"
-         "7. BEHAVIOR: Be pedagogical, encouraging, and clear.")
+         "1. LANGUAGE: ALWAYS answer in the same language as the user's question.\n"
+         "2. COURSE QUESTIONS: Use 'search_course' to find answers in the PDF.\n"
+         "3. DEFINITIONS: Use 'search_wikipedia' for general definitions.\n"
+         "4. QUIZZES: Use 'generate_quiz_context' with specific keywords.\n"
+         "5. MATHS/LOGIC: Use 'python_interpreter'.\n"
+         "6. PLANNING: Use 'create_study_plan' when user asks for a schedule.\n"
+         "7. Be pedagogical, encouraging, and clear.")
         
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
 
-        # 4. Exécution (Syntaxe LangGraph)
-        # On doit passer l'état actuel (les messages)
-        inputs = {"messages": st.session_state.messages + [("human", user_input)]}
+        inputs = {"messages": st.session_state.messages}
         
         with st.chat_message("assistant"):
             with st.spinner("Réflexion..."):
                 try:
-                    # 2. INVOQUER L'AGENT AVEC L'HISTORIQUE COMPLET
-                    # LangGraph va gérer les appels d'outils INTERNES ici
-                    inputs = {"messages": st.session_state.messages}
                     response = agent_graph.invoke(inputs)
-                    
-                    # 3. RECUPERER LA REPONSE FINALE
-                    # response["messages"] contient tout l'historique mis à jour (User + ToolCalls + ToolOutputs + AI Final)
                     full_history = response["messages"]
                     final_answer = full_history[-1].content
                     
-                    # 4. AFFICHER LA REPONSE
                     st.write(final_answer)
     
                     if os.path.exists("plot.png"):
                         st.image("plot.png", caption="Graphique généré par l'Agent")
-                        os.remove("plot.png") # Nettoyage
-                    # 5. DEBUGGING
+                        os.remove("plot.png")
+                    
+                    # Debug
                     last_human_index = -1
                     for i, msg in enumerate(full_history):
                         if isinstance(msg, HumanMessage):
                             last_human_index = i
                     
-                    # 2. On scanne les messages suivants à la recherche d'appels d'outils
                     used_tools = []
                     if last_human_index != -1:
                         for msg in full_history[last_human_index:]:
@@ -321,9 +322,7 @@ def main():
                                 for tool_call in msg.tool_calls:
                                     used_tools.append(tool_call['name'])
                     
-                    # 3. Affichage visuel
                     if used_tools:
-                        # set() pour éviter les doublons si l'outil est appelé 2 fois
                         unique_tools = list(set(used_tools))
                         with st.expander("🕵️‍♂️ Debug : Voir les outils utilisés", expanded=True):
                             st.write(f"Pour répondre, l'agent a utilisé : **{', '.join(unique_tools)}**")
@@ -331,8 +330,6 @@ def main():
                         with st.expander("🕵️‍♂️ Debug", expanded=False):
                             st.write("L'agent a répondu directement (sans outils).")
                             
-                    # 6. METTRE A JOUR LA MEMOIRE DE SESSION
-                    # On remplace l'historique par celui retourné par l'agent (qui contient les traces des outils)
                     st.session_state.messages = full_history
                     
                 except Exception as e:
