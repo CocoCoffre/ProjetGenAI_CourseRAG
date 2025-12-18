@@ -22,8 +22,6 @@ from langchain_community.vectorstores import FAISS
 # --- Config ---
 st.set_page_config(page_title="Agent Étudiant (LangGraph)", page_icon="🤖")
 
-if "doc_previews" not in st.session_state:
-    st.session_state.doc_previews = {}
 # --- 1. BACKEND (PDF) ---
 
 def process_documents(uploaded_files):
@@ -200,7 +198,9 @@ def main():
         st.session_state.messages = []
     if "vectorstore" not in st.session_state:
         st.session_state.vectorstore = None
-
+    
+    if "doc_previews" not in st.session_state:
+        st.session_state.doc_previews = {}
     # Sidebar
     with st.sidebar:
         st.header("Documents")
