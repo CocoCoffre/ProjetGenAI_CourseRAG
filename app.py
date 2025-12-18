@@ -213,7 +213,7 @@ def main():
         # 2. Configuration Agent
         llm = ChatGroq(
             groq_api_key=groq_api_key, 
-            model_name="mistral-saba-24b",
+            model_name="qwen/qwen3-32b",
             temperature=0
         )
         
