@@ -51,7 +51,7 @@ def process_documents(uploaded_files):
                     full_text_preview += doc.page_content + "\n"
             
             # On stocke cet aperçu dans la session
-            st.session_state.doc_previews[file.name] = full_text_preview[:2000] # Limite à 2000 car
+            st.session_state.doc_previews[file.name] = full_text_preview[:3000] # Limite à 2000 car
             
             documents.extend(docs)
             
