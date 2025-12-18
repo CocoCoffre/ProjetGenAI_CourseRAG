@@ -163,7 +163,7 @@ def create_study_plan(days: int, focus: str = "All") -> str:
         focus: Specific focus or 'All' to cover all uploaded documents.
     """
     
-     previews = st.session_state.get("doc_previews", {})
+    previews = st.session_state.get("doc_previews", {})
     
     if not previews:
         return (
