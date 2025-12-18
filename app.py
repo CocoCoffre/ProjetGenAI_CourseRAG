@@ -247,19 +247,19 @@ def main():
         files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
         
         process_btn = st.button("Traiter les documents")
-        # Check vectorstore quality
-        check_vectorstore_quality(
-            st.session_state.vectorstore,
-            ["LSTM", "gradient", "neurone", "apprentissage"]
-        )
-        
-        st.success("Pret !")
+           
         if process_btn and files:
             with st.spinner("Analyse..."):
                 docs = process_documents(files)
                 st.session_state.vectorstore = build_vector_store(docs)
                 st.success("Prêt !")
+                # Check vectorstore quality
+                check_vectorstore_quality(
+                    st.session_state.vectorstore,
+                    ["LSTM", "gradient", "neurone", "apprentissage"]
+                )
         
+        st.success("Pret !")
         st.markdown("---")
         st.caption("Outils : RAG, Wiki, Quiz, Python, Planning")
         
