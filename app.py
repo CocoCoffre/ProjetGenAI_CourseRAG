@@ -232,17 +232,6 @@ def create_all_tools(vectorstore, doc_previews: dict):
         python_interpreter, 
     ]
 
-# --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
-# On instancie l'outil officiel
-python_repl_tool = PythonREPLTool()
-python_repl_tool.name = "python_interpreter"
-python_repl_tool.description = (
-    "A Python shell. Use this to execute python commands. "
-    "Input should be a valid python script. "
-    "Use this to solve math problems, calculating statistics, or plotting data. "
-    "If you want to see the output of a value, you should print it with `print(...)`."
-    "If you generate a plot, save it as 'plot.png'."
-)
 
 # --- 4. APPLICATION ---
 
@@ -638,7 +627,7 @@ def main():
         python_repl.name = "python_interpreter"
         python_repl.description = "Execute Python code for calculations."
         
-        tools = st.session_state.tools + [python_repl]
+        tools = st.session_state.tools 
         
         # Build system prompt
         docs_context = ""
