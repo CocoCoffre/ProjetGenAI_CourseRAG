@@ -19,6 +19,10 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_community.vectorstores import FAISS
 
+import matplotlib
+matplotlib.use('Agg')  # Backend non-interactif
+import matplotlib.pyplot as plt
+
 # --- Config ---
 st.set_page_config(page_title="Agent Étudiant (LangGraph)", page_icon="🤖")
 
@@ -170,13 +174,65 @@ def create_all_tools(vectorstore, doc_previews: dict):
             return "\n\n".join([doc.page_content for doc in docs])
         except Exception as e:
             return f"Wikipedia search error: {e}"
-    
+
+    # Tool Python avec exécution et affichage
+    @tool
+    def python_interpreter(code: str) -> str:
+        """
+        Execute Python code for calculations, data analysis, or plotting.
+        Supports matplotlib plots - save as 'plot.png'.
+        
+        Args:
+            code: Python code to execute
+        """
+        import sys
+        from io import StringIO
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        
+        old_stdout = sys.stdout
+        sys.stdout = StringIO()
+        
+        exec_globals = {'plt': plt}
+        
+        try:
+            # Auto-import numpy/pandas si nécessaire
+            if 'np.' in code or 'numpy' in code:
+                import numpy as np
+                exec_globals['np'] = np
+                exec_globals['numpy'] = np
+            
+            if 'pd.' in code or 'pandas' in code:
+                import pandas as pd
+                exec_globals['pd'] = pd
+                exec_globals['pandas'] = pd
+            
+            # Exécuter le code
+            exec(code, exec_globals)
+            
+            # Récupérer output
+            output = sys.stdout.getvalue()
+            sys.stdout = old_stdout
+            
+            # Sauvegarder plot si créé
+            if plt.get_fignums():
+                plt.savefig('plot.png', dpi=150, bbox_inches='tight')
+                plt.close('all')
+                output += "\n\n📊 Graphique créé et sauvegardé."
+            
+            return output if output else "✅ Code exécuté avec succès."
+        
+        except Exception as e:
+            sys.stdout = old_stdout
+            return f"❌ Erreur: {type(e).__name__}: {str(e)}"
     # Return list of tool objects
     return [
         search_course,
         generate_quiz_context,
         create_study_plan,
         search_wikipedia,
+        python_interpreter,
     ]
 
 # --- 3. LE DATA SCIENTIST (PYTHON REPL) ---
@@ -658,6 +714,24 @@ def main():
                     final_answer = response["messages"][-1].content
                     st.write(final_answer)
                     st.session_state.messages = response["messages"]
+
+                        # ✅ AFFICHER LE PLOT SI CRÉÉ
+                    if os.path.exists("plot.png"):
+                        st.image("plot.png", caption="📊 Résultat graphique", use_container_width=True)
+                        os.remove("plot.png")  # Nettoyer après affichage
+            
+                    # Debug tools
+                    used_tools = []
+                    for msg in full_history:
+                        if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+                            for tool_call in msg.tool_calls:
+                                used_tools.append(tool_call['name'])
+            
+                    if used_tools:
+                        with st.expander("🔍 Debug: Outils utilisés", expanded=True):
+                            st.write(f"**{', '.join(set(used_tools))}**")
+            
+                st.session_state.messages = full_history
                 except Exception as e:
                     st.error(f"Erreur: {e}")
 
