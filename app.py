@@ -575,7 +575,7 @@ def main():
         
         llm = ChatGroq(
             groq_api_key=groq_api_key,
-            model_name="qwen/qwen3-32b",
+            model_name="llama-3.3-70b-versatile",
             temperature=0
         )
         
