@@ -42,7 +42,7 @@ load_dotenv()
 # Configure Streamlit page properties
 st.set_page_config(
     page_title="AI Tutor - Course RAG with CoT",
-    page_icon="🤖",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -416,7 +416,7 @@ def main():
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* Sidebar styling (white background) */
+    /* Sidebar styling (white background with better visibility) */
     [data-testid="stSidebar"] {
         background: white !important;
         border-right: 3px solid #667eea;
@@ -434,7 +434,7 @@ def main():
         font-weight: 700 !important;
     }
     
-    /* Success/Warning status badges */
+    /* SUCCESS/WARNING STATUS BADGES */
     [data-testid="stSidebar"] .stSuccess {
         background: #48bb78 !important;
         color: white !important;
@@ -447,7 +447,7 @@ def main():
         border-radius: 10px !important;
     }
     
-    /* Custom title hero section */
+    /* CUSTOM TITLE HERO SECTION */
     .custom-title {
         text-align: center;
         padding: 2rem;
@@ -473,7 +473,7 @@ def main():
         font-weight: 600;
     }
     
-    /* Chat message bubble styling */
+    /* CHAT MESSAGE BUBBLE STYLING */
     .stChatMessage {
         background: white !important;
         border-radius: 20px !important;
@@ -513,7 +513,7 @@ def main():
         color: #667eea !important;
     }
     
-    /* Chat input container styling */
+    /* CHAT INPUT CONTAINER STYLING */
     .stChatInputContainer {
         background: white !important;
         border-radius: 25px !important;
@@ -535,7 +535,7 @@ def main():
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
     }
     
-    /* Button styling */
+    /* BUTTON STYLING */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
@@ -552,11 +552,22 @@ def main():
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
     }
     
-    /* File uploader styling */
+    /* FILE UPLOADER STYLING - LIGHT AND CLEAR */
     [data-testid="stFileUploader"] {
-        background: white !important;
+        background: #f8f9ff !important;
         border-radius: 15px !important;
         border: 2px dashed #667eea !important;
+        padding: 1.5rem !important;
+    }
+    
+    [data-testid="stFileUploader"] * {
+        color: #2d3748 !important;
+    }
+    
+    [data-testid="stFileUploader"] div[data-testid="stFileUploadDropzone"] {
+        background: linear-gradient(135deg, #f8f9ff 0%, #e8eaf8 100%) !important;
+        border: 2px dashed #667eea !important;
+        border-radius: 12px !important;
     }
     
     /* Expandable sections (debug info) */
@@ -619,13 +630,31 @@ def main():
     .stChatMessage {
         animation: fadeIn 0.5s ease-out;
     }
+    
+    /* FIX SIDEBAR COLLAPSE BUTTON VISIBILITY */
+    [data-testid="collapseSidebarButton"] {
+        background-color: #667eea !important;
+        color: white !important;
+        border-radius: 8px !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    [data-testid="collapseSidebarButton"]:hover {
+        background-color: #764ba2 !important;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
+    }
+    
+    /* ENSURE SIDEBAR IS ALWAYS RECOVERABLE */
+    .st-emotion-cache-1lnfsz6 {
+        visibility: visible !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
     # ========== HEADER SECTION ==========
     st.markdown("""
     <div class="custom-title">
-        <h1>🤖 Professeur IA</h1>
+        <h1>🧠 Professeur IA</h1>
         <p class="custom-subtitle">Intelligent AI Tutor - Learn with Chain of Thought Reasoning</p>
     </div>
     """, unsafe_allow_html=True)
