@@ -519,7 +519,7 @@ def main():
     
     .stChatInputContainer textarea {
         background: white;
-        color: #2d3748;
+        color: #737A8C;
         border-radius: 20px;
         border: 2px solid #e2e8f0;
         padding: 1rem;
