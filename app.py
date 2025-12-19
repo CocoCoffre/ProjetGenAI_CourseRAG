@@ -508,6 +508,26 @@ def main():
         color: #667eea;
     }
     
+    /* ===== FIX: Make inline code (function names) visible ===== */
+    /* Style for all code elements */
+    code {
+        background: #e8eaf8 !important;
+        color: #667eea !important;
+        padding: 2px 6px !important;
+        border-radius: 5px !important;
+        font-weight: 600 !important;
+        border: 1px solid #667eea !important;
+        font-family: 'Monaco', 'Menlo', 'Consolas', monospace !important;
+    }
+    
+    /* Force visibility in assistant messages specifically */
+    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) code {
+        background: #e8eaf8 !important;
+        color: #667eea !important;
+        border: 1px solid #667eea !important;
+        font-weight: 600 !important;
+    }
+    
     /* Chat input */
     .stChatInputContainer {
         background: white;
