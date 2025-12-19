@@ -416,15 +416,24 @@ def main():
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* Sidebar styling (white background with better visibility) */
+    /* SIDEBAR - ALWAYS VISIBLE WITH PROPER STYLING */
     [data-testid="stSidebar"] {
         background: white !important;
-        border-right: 3px solid #667eea;
-        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
+        border-right: 3px solid #667eea !important;
+        box-shadow: 4px 0 15px rgba(0,0,0,0.1) !important;
+        visibility: visible !important;
+        z-index: 999 !important;
+        position: relative !important;
+    }
+    
+    /* Ensure sidebar items are visible */
+    [data-testid="stSidebar"] [class*="element-container"] {
+        visibility: visible !important;
     }
     
     [data-testid="stSidebar"] * {
         color: #2d3748 !important;
+        visibility: visible !important;
     }
     
     [data-testid="stSidebar"] h1, 
@@ -432,6 +441,30 @@ def main():
     [data-testid="stSidebar"] h3 {
         color: #667eea !important;
         font-weight: 700 !important;
+        visibility: visible !important;
+    }
+    
+    /* SIDEBAR BUTTON/TOGGLE - MAXIMUM VISIBILITY */
+    button[kind="header"] {
+        background-color: #667eea !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 8px !important;
+        padding: 8px 12px !important;
+        width: auto !important;
+        visibility: visible !important;
+        z-index: 1000 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    button[kind="header"]:hover {
+        background-color: #764ba2 !important;
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.6) !important;
+        transform: scale(1.05) !important;
     }
     
     /* SUCCESS/WARNING STATUS BADGES */
@@ -629,24 +662,6 @@ def main():
     
     .stChatMessage {
         animation: fadeIn 0.5s ease-out;
-    }
-    
-    /* FIX SIDEBAR COLLAPSE BUTTON VISIBILITY */
-    [data-testid="collapseSidebarButton"] {
-        background-color: #667eea !important;
-        color: white !important;
-        border-radius: 8px !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    [data-testid="collapseSidebarButton"]:hover {
-        background-color: #764ba2 !important;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4) !important;
-    }
-    
-    /* ENSURE SIDEBAR IS ALWAYS RECOVERABLE */
-    .st-emotion-cache-1lnfsz6 {
-        visibility: visible !important;
     }
     </style>
     """, unsafe_allow_html=True)
