@@ -425,6 +425,23 @@ def main():
         padding: 1.5rem;
     }
     
+    /* ===== VISIBILITY FIX: Make indexed files visible ===== */
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] .stCaption {
+        color: #667eea !important;
+        font-weight: 600 !important;
+    }
+    
+    [data-testid="stSidebar"] p {
+        color: #667eea !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Make caption text (file names) bright and visible */
+    [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] {
+        color: #667eea !important;
+    }
+    
     /* Custom title */
     .custom-title {
         text-align: center;
@@ -530,7 +547,7 @@ def main():
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
     }
     
-    /* Expandable sections */
+    /* Expandable sections - makes tool names visible */
     .streamlit-expanderHeader {
         background: #667eea;
         color: white;
@@ -538,11 +555,21 @@ def main():
         font-weight: 600;
     }
     
+    .streamlit-expanderHeader:hover {
+        background: #764ba2;
+    }
+    
     .streamlit-expanderContent {
         background: white;
         color: #2d3748;
         border: 2px solid #667eea;
         border-top: none;
+    }
+    
+    /* Make tool names bright purple in expandable content */
+    .streamlit-expanderContent * {
+        color: #667eea !important;
+        font-weight: 600 !important;
     }
     
     /* Tables */
@@ -621,7 +648,7 @@ def main():
                 st.success("✅ Documents ready for learning!")
         
         st.divider()
-        st.caption("🔧 Tools: RAG Search • Quizzes • Planning • Code Execution")
+        st.markdown("<p style='color: #667eea; font-weight: bold;'>🔧 Tools: RAG Search • Quizzes • Planning • Code Execution</p>", unsafe_allow_html=True)
         
         if st.session_state.vectorstore is not None:
             num_vectors = st.session_state.vectorstore.index.ntotal
@@ -632,7 +659,7 @@ def main():
         if st.session_state.doc_previews:
             st.markdown("### 📄 Indexed Files:")
             for filename in st.session_state.doc_previews.keys():
-                st.caption(f"📖 {filename}")
+                st.markdown(f"<p style='color: #667eea; font-weight: bold; font-size: 16px;'>📖 {filename}</p>", unsafe_allow_html=True)
     
     # ========== CHAT INTERFACE ==========
     for msg in st.session_state.messages:
@@ -730,7 +757,7 @@ def main():
                     
                     if used_tools:
                         with st.expander("🔍 Debug Info: Tools Used", expanded=False):
-                            st.write(f"**{', '.join(set(used_tools))}**")
+                            st.markdown(f"<p style='color: #667eea; font-weight: bold; font-size: 18px;'>{', '.join(set(used_tools))}</p>", unsafe_allow_html=True)
                     
                     st.session_state.messages = full_history
                     
