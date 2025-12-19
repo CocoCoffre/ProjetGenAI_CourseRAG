@@ -731,7 +731,7 @@ def main():
                         with st.expander("🔍 Debug: Outils utilisés", expanded=True):
                             st.write(f"**{', '.join(set(used_tools))}**")
             
-                st.session_state.messages = full_history
+                    st.session_state.messages = full_history
                 except Exception as e:
                     st.error(f"Erreur: {e}")
 
