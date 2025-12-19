@@ -398,108 +398,34 @@ def main():
     # ========== CUSTOM CSS STYLING ==========
     st.markdown("""
     <style>
-    /* Reset Streamlit defaults */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 0rem;
-        padding-left: 2rem;
-        padding-right: 2rem;
-        max-width: 100%;
-    }
-    
-    /* Main gradient background (purple theme) */
+    /* Main app background */
     .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* SIDEBAR - FULLY VISIBLE AND ACCESSIBLE */
+    /* Sidebar styling */
     [data-testid="stSidebar"] {
-        background: white !important;
-        border-right: 3px solid #667eea !important;
-        box-shadow: 4px 0 15px rgba(0,0,0,0.1) !important;
+        background: white;
+        border-right: 3px solid #667eea;
+        box-shadow: 4px 0 15px rgba(0,0,0,0.1);
     }
     
-    /* Ensure all sidebar content is visible */
-    [data-testid="stSidebar"] > * {
-        visibility: visible !important;
-        opacity: 1 !important;
-        display: block !important;
-    }
-    
-    [data-testid="stSidebar"] * {
-        visibility: visible !important;
-        opacity: 1 !important;
-        color: #2d3748 !important;
-    }
-    
-    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
     [data-testid="stSidebar"] h3 {
-        color: #667eea !important;
-        font-weight: 700 !important;
-        visibility: visible !important;
+        color: #667eea;
+        font-weight: 700;
     }
     
-    /* FILE UPLOADER - FULLY VISIBLE */
+    /* File uploader styling */
     [data-testid="stFileUploader"] {
-        background: #f8f9ff !important;
-        border-radius: 15px !important;
-        border: 2px dashed #667eea !important;
-        padding: 1.5rem !important;
-        visibility: visible !important;
-        opacity: 1 !important;
+        background: #f8f9ff;
+        border-radius: 15px;
+        border: 2px dashed #667eea;
+        padding: 1.5rem;
     }
     
-    [data-testid="stFileUploader"] * {
-        color: #2d3748 !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-    }
-    
-    [data-testid="stFileUploadDropzone"] {
-        background: linear-gradient(135deg, #f8f9ff 0%, #e8eaf8 100%) !important;
-        border: 2px dashed #667eea !important;
-        border-radius: 12px !important;
-        visibility: visible !important;
-    }
-    
-    /* SIDEBAR TOGGLE BUTTON - ALWAYS VISIBLE */
-    button[kind="header"] {
-        background-color: #667eea !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 8px !important;
-        padding: 8px 12px !important;
-        visibility: visible !important;
-        z-index: 1000 !important;
-        cursor: pointer !important;
-        transition: all 0.3s ease !important;
-    }
-    
-    button[kind="header"]:hover {
-        background-color: #764ba2 !important;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.6) !important;
-        transform: scale(1.05) !important;
-    }
-    
-    /* SUCCESS/WARNING STATUS BADGES */
-    [data-testid="stSidebar"] .stSuccess {
-        background: #48bb78 !important;
-        color: white !important;
-        border-radius: 10px !important;
-    }
-    
-    [data-testid="stSidebar"] .stWarning {
-        background: #f56565 !important;
-        color: white !important;
-        border-radius: 10px !important;
-    }
-    
-    /* CUSTOM TITLE HERO SECTION */
+    /* Custom title */
     .custom-title {
         text-align: center;
         padding: 2rem;
@@ -513,9 +439,9 @@ def main():
         background: linear-gradient(90deg, #667eea, #764ba2);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-size: 3rem !important;
-        font-weight: 900 !important;
-        margin: 0 !important;
+        font-size: 3rem;
+        font-weight: 900;
+        margin: 0;
     }
     
     .custom-subtitle {
@@ -525,144 +451,126 @@ def main():
         font-weight: 600;
     }
     
-    /* CHAT MESSAGE BUBBLE STYLING */
+    /* Chat messages */
     .stChatMessage {
-        background: white !important;
-        border-radius: 20px !important;
-        padding: 1.5rem !important;
-        margin: 1rem 0 !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
-        transition: all 0.3s ease !important;
+        background: white;
+        border-radius: 20px;
+        padding: 1.5rem;
+        margin: 1rem 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
     }
     
     .stChatMessage:hover {
         transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
     }
     
-    /* User message: gradient background with white text */
+    /* User messages */
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) * {
-        color: white !important;
+        color: white;
     }
     
-    /* Assistant message: white background with purple border and text */
+    /* Assistant messages */
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) {
-        background: white !important;
-        border: 2px solid #667eea !important;
+        background: white;
+        border: 2px solid #667eea;
     }
     
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) * {
-        color: #2d3748 !important;
+        color: #2d3748;
     }
     
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h1,
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h2,
     div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h3 {
-        color: #667eea !important;
+        color: #667eea;
     }
     
-    /* CHAT INPUT CONTAINER STYLING */
+    /* Chat input */
     .stChatInputContainer {
-        background: white !important;
-        border-radius: 25px !important;
-        padding: 1rem !important;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
-        border: 2px solid #667eea !important;
+        background: white;
+        border-radius: 25px;
+        padding: 1rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        border: 2px solid #667eea;
     }
     
     .stChatInputContainer textarea {
-        background: white !important;
-        color: #2d3748 !important;
-        border-radius: 20px !important;
-        border: 2px solid #e2e8f0 !important;
-        padding: 1rem !important;
+        background: white;
+        color: #2d3748;
+        border-radius: 20px;
+        border: 2px solid #e2e8f0;
+        padding: 1rem;
     }
     
     .stChatInputContainer textarea:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
     }
     
-    /* BUTTON STYLING */
+    /* Buttons */
     .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        color: white !important;
-        border-radius: 15px !important;
-        padding: 0.75rem 2rem !important;
-        font-weight: 600 !important;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4) !important;
-        transition: all 0.3s ease !important;
-        width: 100% !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        transition: all 0.3s ease;
+        width: 100%;
     }
     
     .stButton > button:hover {
-        transform: translateY(-3px) !important;
-        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
     }
     
-    /* Expandable sections (debug info) */
+    /* Expandable sections */
     .streamlit-expanderHeader {
-        background: #667eea !important;
-        color: white !important;
-        border-radius: 15px !important;
-        font-weight: 600 !important;
+        background: #667eea;
+        color: white;
+        border-radius: 15px;
+        font-weight: 600;
     }
     
     .streamlit-expanderContent {
-        background: white !important;
-        color: #2d3748 !important;
-        border: 2px solid #667eea !important;
-        border-top: none !important;
+        background: white;
+        color: #2d3748;
+        border: 2px solid #667eea;
+        border-top: none;
     }
     
-    /* Code styling */
-    code {
-        background: #f7fafc !important;
-        color: #667eea !important;
-        border-radius: 5px !important;
-    }
-    
-    /* Table styling */
+    /* Tables */
     table {
-        background: white !important;
-        border-radius: 10px !important;
-    }
-    
-    thead tr {
-        background: #667eea !important;
-    }
-    
-    thead th {
-        color: white !important;
-        font-weight: 600 !important;
-    }
-    
-    tbody td {
-        color: #2d3748 !important;
-    }
-    
-    /* Scrollbar styling */
-    ::-webkit-scrollbar {
-        width: 12px;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: white;
         border-radius: 10px;
     }
     
-    /* Message appearance animation */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
+    thead tr {
+        background: #667eea;
     }
     
-    .stChatMessage {
-        animation: fadeIn 0.5s ease-out;
+    thead th {
+        color: white;
+        font-weight: 600;
+    }
+    
+    tbody td {
+        color: #2d3748;
+    }
+    
+    /* Success/Warning messages */
+    .stSuccess {
+        background-color: #c6f6d5;
+    }
+    
+    .stWarning {
+        background-color: #fed7d7;
     }
     </style>
     """, unsafe_allow_html=True)
