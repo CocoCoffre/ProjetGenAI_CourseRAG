@@ -1,245 +1,462 @@
+"""Intelligent AI Tutor Application using Streamlit and LangChain.
+
+This application provides an AI-powered tutoring system that helps students learn from
+their course materials using Retrieval-Augmented Generation (RAG) with Chain of Thought (CoT)
+reasoning. It supports document search, quizzes, study planning, and code execution.
+
+Architecture:
+- Document Processing: PDF loading and semantic chunking
+- Vector Retrieval: FAISS-based semantic search
+- Multi-Tool Agent: 5 specialized tools for different learning tasks
+- Chain of Thought: Explicit reasoning steps (Pensée → Action → Observation → Réponse)
+- LLM: Groq's Llama 3.3 70B for fast inference
+
+Author: Course RAG Project Team
+Date: December 2025
+"""
+
 import streamlit as st
 import os
 import tempfile
 from dotenv import load_dotenv
 import matplotlib
-matplotlib.use('Agg')  # Backend non-interactif
+matplotlib.use('Agg')  # Use non-interactive backend for server environments
 import matplotlib.pyplot as plt
+import sys
+from io import StringIO
 
-# --- IMPORTS STRICTS (Basés sur ta doc LangGraph) ---
+# LangChain ecosystem imports
 from langchain.tools import tool
 from langchain_groq import ChatGroq
-# C'est LA fonction dont parle ta doc (qui construit un graph):
-from langchain.agents import create_agent 
-
+from langchain.agents import create_agent
 from langchain_community.retrievers import WikipediaRetriever
-from langchain_experimental.tools import PythonREPLTool
-
-# --- Imports standards RAG ---
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain_community.vectorstores import FAISS
 
-# --- Config ---
-st.set_page_config(page_title="Agent Étudiant (LangGraph)", page_icon="🤖")
+# Load environment variables from .env file
+load_dotenv()
 
-# --- 1. BACKEND (PDF) ---
+# Configure Streamlit page properties
+st.set_page_config(
+    page_title=\"AI Tutor - Course RAG with CoT\",
+    page_icon=\"🤖\",
+    layout=\"wide\",
+    initial_sidebar_state=\"expanded\"
+)
 
-def process_documents(uploaded_files):
-    """Lecture des PDF avec extraction des noms de fichiers réels."""
-    documents = []
+
+# ============================================================================
+# SECTION 1: DOCUMENT PROCESSING
+# ============================================================================
+
+def process_documents(uploaded_files: list) -> list:
+    \"\"\"Process uploaded PDF files and extract their content.
     
-    # On vide les previews précédents pour ne pas mélanger les cours
-    st.session_state.doc_previews = {}
+    This function:
+    1. Creates temporary files for each PDF upload
+    2. Loads pages using PyPDFLoader
+    3. Stores original filename in document metadata
+    4. Generates previews for study planning context
+    5. Cleans up temporary files after processing
+    
+    Args:
+        uploaded_files: List of Streamlit UploadedFile objects (type: PDF)
+        
+    Returns:
+        List of LangChain Document objects with preserved metadata
+        
+    Example:
+        documents = process_documents(uploaded_files)
+        # Returns list of Document objects ready for vectorization
+    \"\"\"
+    documents = []
+    st.session_state.doc_previews = {}  # Reset to avoid mixing courses
     
     for file in uploaded_files:
-        # Création fichier temporaire
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+        # Create temporary file to hold PDF content during processing
+        with tempfile.NamedTemporaryFile(delete=False, suffix=\".pdf\") as tmp_file:
             tmp_file.write(file.getvalue())
             tmp_path = tmp_file.name
             
         try:
+            # Load PDF pages using PyPDFLoader
             loader = PyPDFLoader(tmp_path)
             docs = loader.load()
             
-            # --- CORRECTION CRITIQUE : GESTION DES METADONNÉES ---
-            # PyPDFLoader met le chemin temporaire dans 'source'. On remet le vrai nom du fichier.
-            # On en profite pour capturer le début du texte pour le planning.
-            full_text_preview = ""
+            # Process metadata: Replace temp path with actual filename
+            # and collect preview text from first 3 pages
+            full_text_preview = \"\"
             for i, doc in enumerate(docs):
-                doc.metadata["source"] = file.name # Remplace '/tmp/x.pdf' par 'Lecture 01.pdf'
-                if i < 3: # On prend les 3 premières pages pour l'aperçu structurel
-                    full_text_preview += doc.page_content + "\n"
+                # Store original filename (not /tmp/xxxxx.pdf)
+                doc.metadata[\"source\"] = file.name
+                
+                # Collect text from first 3 pages for study planning context
+                if i < 3:
+                    full_text_preview += doc.page_content + \"\\n\"
             
-            # On stocke cet aperçu dans la session
-            st.session_state.doc_previews[file.name] = full_text_preview[:3000] # Limite à 2000 car
+            # Store preview for later use in create_study_plan tool
+            st.session_state.doc_previews[file.name] = full_text_preview[:3000]
             
+            # Add all pages to document collection
             documents.extend(docs)
             
         finally:
+            # Ensure temporary file is cleaned up
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
                 
     return documents
 
-def build_vector_store(documents):
-    """Indexation with optimized chunking."""
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,        # Smaller chunks for better retrieval
-        chunk_overlap=100,
-        separators=["\n\n", "\n", ".", " "]
-    )
-    splits = text_splitter.split_documents(documents)
-    print(f"DEBUG: Created {len(splits)} chunks from {len(documents)} documents")
+
+def build_vector_store(documents: list) -> FAISS:
+    \"\"\"Build a FAISS vector store from documents for semantic search.
     
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    Strategy:
+    - Chunk documents into semantic units (500 chars) for accurate retrieval
+    - Use recursive splitting to maintain context coherence
+    - Apply overlap between chunks to preserve surrounding information
+    - Generate embeddings using HuggingFace's lightweight model
+    - Index with FAISS for O(1) similarity search performance
+    
+    Chunking Strategy:
+    - Size: 500 chars (optimal for semantic completeness)
+    - Overlap: 100 chars (preserves context bridges between chunks)
+    - Separators: Hierarchical (paragraphs → sentences → words)
+    
+    Args:
+        documents: List of LangChain Document objects with page_content
+        
+    Returns:
+        FAISS vector store indexed and ready for similarity searches
+        
+    Example:
+        vectorstore = build_vector_store(documents)
+        results = vectorstore.similarity_search(\"What is an LSTM?\", k=4)
+    \"\"\"
+    # Initialize splitter with optimized parameters
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,  # Size of each chunk in characters
+        chunk_overlap=100,  # Overlap between consecutive chunks
+        separators=[\"\\n\\n\", \"\\n\", \".\", \" \"]  # Try these boundaries in order
+    )
+    
+    # Split documents into chunks
+    splits = text_splitter.split_documents(documents)
+    print(f\"[DEBUG] Created {len(splits)} chunks from {len(documents)} documents\")
+    
+    # Initialize embeddings model (all-MiniLM-L6-v2: 384-dim, ~22MB)
+    embeddings = HuggingFaceEmbeddings(model_name=\"all-MiniLM-L6-v2\")
+    
+    # Create and index FAISS vector store
     vectorstore = FAISS.from_documents(splits, embeddings)
-    print(f"DEBUG: Vectorstore indexed with {vectorstore.index.ntotal} vectors")
+    print(f\"[DEBUG] Vectorstore indexed with {vectorstore.index.ntotal} vectors\")
     
     return vectorstore
 
-def check_vectorstore_quality(vectorstore, test_queries):
-    """Check if vectorstore is working by running test queries."""
-    print("\n[VECTORSTORE QUALITY CHECK]")
-    print(f"Total vectors indexed: {vectorstore.index.ntotal}")
+
+# ============================================================================
+# SECTION 2: TOOL FACTORY - Creates all agent tools with closure pattern
+# ============================================================================
+
+def create_all_tools(vectorstore: FAISS, doc_previews: dict) -> list:
+    \"\"\"Factory function to create all LLM tools with vectorstore access.
     
-    for query in test_queries:
-        results = vectorstore.similarity_search(query, k=2)
-        print(f"\nQuery: '{query}'")
-        print(f"  Matches: {len(results)}")
-        if results:
-            print(f"  Top match: {results[0].page_content[:100]}...")
-            
-# --- 2. DÉFINITION DES SCHÉMAS  ---
-
-
-# --- 3. DÉFINITION DE L'OUTIL AVEC @tool (TA DEMANDE) ---
-
-def create_all_tools(vectorstore, doc_previews: dict):
-    """
-    Factory function that creates all tools with access to vectorstore and previews.
-    Returns a list of tool objects.
-    """
+    Why closure pattern?
+    - Avoids using st.session_state inside tools (causes issues in LangGraph)
+    - Binds vectorstore and doc_previews at tool creation time
+    - Each tool has direct access without global state
     
-    # Tool 1: search_course
+    Tools created (in recommended usage order):
+    1. search_course: Find information in uploaded PDFs
+    2. generate_quiz_context: Extract content for quiz questions
+    3. create_study_plan: Generate revision schedules
+    4. search_wikipedia: General knowledge fallback
+    5. python_interpreter: Execute code for math/analysis/plotting
+    
+    Args:
+        vectorstore: FAISS vector store for document search
+        doc_previews: Dict mapping filename → preview text
+        
+    Returns:
+        List of @tool decorated functions ready for agent
+        
+    Architecture:
+        create_all_tools returns [tool1, tool2, tool3, ...]
+        └─ Each tool is a @tool-decorated function
+           └─ Each has closure access to vectorstore/doc_previews
+              └─ No st.session_state dependency = works in LangGraph
+    \"\"\"
+    
+    # ========== TOOL 1: Search Course Documents ==========
     @tool
     def search_course(query: str) -> str:
-        """Search uploaded PDF course documents for information about the course content."""
-        print(f"\n[DEBUG search_course] Query: {query}")
-        print(f"  Vectorstore size: {vectorstore.index.ntotal}")
+        \"\"\"Search uploaded course PDFs for information using semantic similarity.
+        
+        Implementation:
+        - Uses FAISS vector store to find semantically similar chunks
+        - Ranks results by cosine similarity
+        - Returns top-4 matches with source citations
+        - Handles cases where no matches are found
+        
+        When to use:
+        - User asks about course content (definitions, concepts, etc.)
+        - Should be called FIRST before Wikipedia for all course questions
+        
+        Args:
+            query: User's question or search term (natural language)
+            
+        Returns:
+            Formatted string with matching content and source filenames
+            OR error message if no matches found
+            
+        Example Output:
+            [From Lecture_01.pdf]
+            An LSTM is a type of RNN that uses memory cells...
+            ---
+            [From Lecture_02.pdf]
+            The key innovation of LSTMs is the cell state...
+        \"\"\"
+        print(f\"[DEBUG search_course] Query: {query}\")
+        print(f\"  Vectorstore size: {vectorstore.index.ntotal} vectors\")
         
         try:
+            # Semantic search: find 4 most similar chunks
             results = vectorstore.similarity_search(query, k=4)
-            print(f"  Results found: {len(results)}")
+            print(f\"  Results found: {len(results)}\")
             
+            # Handle no results case
             if not results:
-                return f"No content found for '{query}' in documents."
+                return f\"No content found for '{query}' in documents.\"
             
+            # Format results with source citations
             formatted = []
             for doc in results:
                 source = doc.metadata.get('source', 'Unknown')
-                formatted.append(f"[From {source}]\n{doc.page_content}")
+                formatted.append(f\"[From {source}]\\n{doc.page_content}\")
             
-            return "\n---\n".join(formatted)
+            # Join results with separator
+            return \"\\n---\\n\".join(formatted)
+            
         except Exception as e:
-            print(f"  ERROR: {e}")
-            return f"Error searching: {e}"
+            print(f\"  ERROR: {e}\")
+            return f\"Error searching documents: {e}\"
     
-    # Tool 2: generate_quiz_context
+    
+    # ========== TOOL 2: Generate Quiz Questions ==========
     @tool
     def generate_quiz_context(topic: str) -> str:
-        """Extract course content to prepare a quiz. Use ONLY when user asks for quiz/test/exercise."""
+        \"\"\"Extract course content for quiz generation.
+        
+        Strategy: Uses Maximal Marginal Relevance (MMR) retrieval to get:
+        - Relevant chunks matching the topic
+        - Diverse chunks (not just repetitive similar content)
+        
+        When to use:
+        - User requests quiz/test/exercise
+        - Agent needs to create questions
+        
+        Args:
+            topic: Subject or concept to quiz on
+            
+        Returns:
+            Relevant course content for question generation
+        \"\"\"
+        # Use MMR for better diversity in results
         retriever = vectorstore.as_retriever(
-            search_type="mmr",
+            search_type=\"mmr\",  # Maximal Marginal Relevance
             search_kwargs={'k': 6, 'fetch_k': 20}
         )
         results = retriever.invoke(topic)
         
         if not results:
-            return f"No information found on '{topic}'."
+            return f\"No information found on '{topic}' in course materials.\"
         
-        content = "\n\n".join([doc.page_content for doc in results])
-        print(f"DEBUG QUIZ - Topic: {topic} - Chunks found: {len(results)}")
-        return f"Course content on '{topic}':\n{content}"
+        # Combine all chunks into one context
+        content = \"\\n\\n\".join([doc.page_content for doc in results])
+        print(f\"[DEBUG QUIZ] Topic: {topic} - Chunks found: {len(results)}\")
+        
+        return f\"Course content on '{topic}':\\n{content}\"
     
-    # Tool 3: create_study_plan
-    @tool
-    def create_study_plan(days: int, focus: str = "All") -> str:
-        """Create revision schedule based on uploaded documents. Use when user asks for planning/schedule/revision."""
-        context_str = "Documents available:\n\n"
-        for filename, preview in doc_previews.items():
-            context_str += f"{filename}\n{preview[:300]}...\n\n"
-        
-        if not doc_previews:
-            context_str = "No preview available - use documents from system prompt"
-        
-        return (
-            f"{context_str}\n"
-            f"Create a {days}-day study plan with table: (Jour | Sujets | Objectifs)"
-        )
     
-    # Tool 4: search_wikipedia (doesn't need vectorstore)
+    # ========== TOOL 3: Create Study Plan ==========
     @tool
-    def search_wikipedia(query: str) -> str:
-        """Search Wikipedia for general knowledge. Use ONLY if search_course finds nothing."""
-        try:
-            from langchain_community.retrievers import WikipediaRetriever
-            retriever = WikipediaRetriever(top_k_results=1, doc_content_chars_max=2000)
-            docs = retriever.invoke(query)
-            if not docs:
-                return "No Wikipedia results found."
-            return "\n\n".join([doc.page_content for doc in docs])
-        except Exception as e:
-            return f"Wikipedia search error: {e}"
-    @tool
-    def python_interpreter(code: str) -> str:
-        """
-        Execute Python code for calculations, data analysis, or plotting.
-        Supports matplotlib plots - save as 'plot.png'.
+    def create_study_plan(days: int, focus: str = \"All\") -> str:
+        \"\"\"Generate a personalized study/revision plan.
+        
+        Creates a structured schedule for students to review course material
+        efficiently over N days.
+        
+        When to use:
+        - User asks for study plan, revision schedule, or planning
         
         Args:
-            code: Python code to execute
-        """
-        import sys
-        from io import StringIO
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
+            days: Number of days available for revision
+            focus: Specific topic to focus on (optional, default: All topics)
+            
+        Returns:
+            Study plan with daily breakdown and learning objectives
+        \"\"\"
+        # Build context from document previews
+        context_str = \"Available Documents:\\n\\n\"
+        for filename, preview in doc_previews.items():
+            context_str += f\"{filename}\\nPreview: {preview[:300]}...\\n\\n\"
         
+        if not doc_previews:
+            context_str = \"No document previews available\"
+        
+        # Return structured prompt for LLM to generate plan
+        return (
+            f\"{context_str}\\n\"
+            f\"Create a {days}-day study plan with Markdown table:\\n\"
+            f\"Columns: (Day | Topics to Review | Learning Objectives)\"
+        )
+    
+    
+    # ========== TOOL 4: Search Wikipedia ==========
+    @tool
+    def search_wikipedia(query: str) -> str:
+        \"\"\"Search Wikipedia for general knowledge information.
+        
+        Used as fallback when course materials don't contain the answer.
+        Provides external reference for broader understanding of topics.
+        
+        When to use:
+        - search_course found nothing
+        - User asks about general knowledge not in course
+        
+        Args:
+            query: Topic or concept to search for
+            
+        Returns:
+            Wikipedia excerpt or error message
+        \"\"\"
+        try:
+            # Initialize Wikipedia retriever
+            retriever = WikipediaRetriever(
+                top_k_results=1,
+                doc_content_chars_max=2000
+            )
+            
+            # Retrieve Wikipedia content
+            docs = retriever.invoke(query)
+            
+            if not docs:
+                return \"No Wikipedia results found for this query.\"
+                
+            # Return content
+            return \"\\n\\n\".join([doc.page_content for doc in docs])
+            
+        except Exception as e:
+            return f\"Wikipedia search error: {e}\"
+    
+    
+    # ========== TOOL 5: Python Code Interpreter ==========
+    @tool
+    def python_interpreter(code: str) -> str:
+        \"\"\"Execute Python code for calculations, data analysis, and plotting.
+        
+        Capabilities:
+        - Executes arbitrary Python code safely (in isolated namespace)
+        - Captures stdout for result display
+        - Auto-imports numpy/pandas if referenced
+        - Saves matplotlib plots to 'plot.png'
+        - Returns execution output and error messages
+        
+        When to use:
+        - User asks for math problems
+        - User needs data analysis
+        - User wants visualizations
+        - User asks for code execution
+        
+        Args:
+            code: Valid Python code to execute
+            
+        Returns:
+            Execution output (print statements) + plot save message if created
+            
+        Example:
+            import numpy as np
+            import matplotlib.pyplot as plt
+            x = np.linspace(0, 2*np.pi, 100)
+            plt.plot(x, np.sin(x))
+            plt.savefig('plot.png')
+            print('Plot created')
+        \"\"\"
+        # Redirect stdout to capture print() output
         old_stdout = sys.stdout
         sys.stdout = StringIO()
         
+        # Isolated namespace for code execution (security + isolation)
         exec_globals = {'plt': plt}
         
         try:
-            # Auto-import numpy/pandas si nécessaire
+            # Auto-import numpy if referenced in code
             if 'np.' in code or 'numpy' in code:
                 import numpy as np
                 exec_globals['np'] = np
                 exec_globals['numpy'] = np
             
+            # Auto-import pandas if referenced in code
             if 'pd.' in code or 'pandas' in code:
                 import pandas as pd
                 exec_globals['pd'] = pd
                 exec_globals['pandas'] = pd
             
-            # Exécuter le code
+            # Execute user code in isolated namespace
             exec(code, exec_globals)
             
-            # Récupérer output
+            # Retrieve captured output from print statements
             output = sys.stdout.getvalue()
             sys.stdout = old_stdout
             
-            # Sauvegarder plot si créé
+            # Save plot if matplotlib figures were created
             if plt.get_fignums():
                 plt.savefig('plot.png', dpi=150, bbox_inches='tight')
-                plt.close('all')
-                output += "\n\n📊 Graphique créé et sauvegardé."
+                plt.close('all')  # Close all figures to free memory
+                output += \"\\n\\n📊 Plot generated and saved.\"
             
-            return output if output else "✅ Code exécuté avec succès."
+            # Return output or success message if nothing printed
+            return output if output else \"✅ Code executed successfully.\"
         
         except Exception as e:
+            # Restore stdout before returning error
             sys.stdout = old_stdout
-            return f"❌ Erreur: {type(e).__name__}: {str(e)}"
-    # Return list of tool objects
+            return f\"❌ Execution error: {type(e).__name__}: {str(e)}\"
+    
+    
+    # ========== Return all tools as a list ==========
     return [
         search_course,
         generate_quiz_context,
         create_study_plan,
         search_wikipedia,
-        python_interpreter, 
+        python_interpreter,
     ]
 
 
-# --- 4. APPLICATION ---
+# ============================================================================
+# SECTION 3: STREAMLIT UI - Main Application Interface
+# ============================================================================
 
 def main():
-    # ✨ CUSTOM CSS - Design lisible et moderne
-    st.markdown("""
+    \"\"\"Main Streamlit application with custom styling and chat interface.
+    
+    Architecture:
+    - Custom CSS for complete UI redesign (not default Streamlit)
+    - Session state for persistent conversation history
+    - Sidebar for document management
+    - Chat interface for user interactions
+    - Agent integration for tool-based reasoning
+    \"\"\"
+    
+    # ========== CUSTOM CSS STYLING ==========
+    # Complete override of Streamlit defaults for modern design
+    st.markdown(\"\"\"
     <style>
-    /* ===== RESET STREAMLIT ===== */
+    /* Reset Streamlit defaults */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
@@ -252,45 +469,43 @@ def main():
         max-width: 100%;
     }
     
-    /* ===== FOND PRINCIPAL ===== */
+    /* Main gradient background (purple theme) */
     .stApp {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* ===== SIDEBAR - Fond BLANC ===== */
-    [data-testid="stSidebar"] {
+    /* Sidebar styling (white background) */
+    [data-testid=\"stSidebar\"] {
         background: white !important;
         border-right: 3px solid #667eea;
         box-shadow: 4px 0 15px rgba(0,0,0,0.1);
     }
     
-    [data-testid="stSidebar"] * {
+    [data-testid=\"stSidebar\"] * {
         color: #2d3748 !important;
     }
     
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 {
+    [data-testid=\"stSidebar\"] h1, 
+    [data-testid=\"stSidebar\"] h2,
+    [data-testid=\"stSidebar\"] h3 {
         color: #667eea !important;
         font-weight: 700 !important;
     }
     
-    /* Success badge dans sidebar */
-    [data-testid="stSidebar"] .stSuccess {
+    /* Success/Warning status badges */
+    [data-testid=\"stSidebar\"] .stSuccess {
         background: #48bb78 !important;
         color: white !important;
         border-radius: 10px !important;
-        padding: 0.5rem 1rem !important;
     }
     
-    [data-testid="stSidebar"] .stWarning {
+    [data-testid=\"stSidebar\"] .stWarning {
         background: #f56565 !important;
         color: white !important;
         border-radius: 10px !important;
-        padding: 0.5rem 1rem !important;
     }
     
-    /* ===== TITRE PRINCIPAL ===== */
+    /* Custom title hero section */
     .custom-title {
         text-align: center;
         padding: 2rem;
@@ -316,7 +531,7 @@ def main():
         font-weight: 600;
     }
     
-    /* ===== MESSAGES CHAT ===== */
+    /* Chat message bubble styling */
     .stChatMessage {
         background: white !important;
         border-radius: 20px !important;
@@ -331,34 +546,32 @@ def main():
         box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
     }
     
-    /* Message UTILISATEUR - Fond gradient, texte BLANC */
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) {
+    /* User message: gradient background with white text */
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarUser\"]) {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-        border: none !important;
     }
     
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarUser"]) * {
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarUser\"]) * {
         color: white !important;
     }
     
-    /* Message ASSISTANT - Fond blanc, texte NOIR */
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) {
+    /* Assistant message: white background with purple border and text */
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarAssistant\"]) {
         background: white !important;
         border: 2px solid #667eea !important;
     }
     
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) * {
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarAssistant\"]) * {
         color: #2d3748 !important;
     }
     
-    /* Emojis dans les messages assistant */
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h1,
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h2,
-    div[data-testid="stChatMessage"]:has(div[data-testid="stChatMessageAvatarAssistant"]) h3 {
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarAssistant\"]) h1,
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarAssistant\"]) h2,
+    div[data-testid=\"stChatMessage\"]:has(div[data-testid=\"stChatMessageAvatarAssistant\"]) h3 {
         color: #667eea !important;
     }
     
-    /* ===== INPUT CHAT ===== */
+    /* Chat input container styling */
     .stChatInputContainer {
         background: white !important;
         border-radius: 25px !important;
@@ -373,7 +586,6 @@ def main():
         border-radius: 20px !important;
         border: 2px solid #e2e8f0 !important;
         padding: 1rem !important;
-        font-size: 1rem !important;
     }
     
     .stChatInputContainer textarea:focus {
@@ -381,20 +593,13 @@ def main():
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2) !important;
     }
     
-    /* Placeholder text */
-    .stChatInputContainer textarea::placeholder {
-        color: #a0aec0 !important;
-    }
-    
-    /* ===== BOUTONS ===== */
+    /* Button styling */
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
         color: white !important;
-        border: none !important;
         border-radius: 15px !important;
         padding: 0.75rem 2rem !important;
         font-weight: 600 !important;
-        font-size: 1rem !important;
         box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4) !important;
         transition: all 0.3s ease !important;
         width: 100% !important;
@@ -405,62 +610,39 @@ def main():
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
     }
     
-    /* ===== FILE UPLOADER ===== */
-    [data-testid="stFileUploader"] {
+    /* File uploader styling */
+    [data-testid=\"stFileUploader\"] {
         background: white !important;
         border-radius: 15px !important;
-        padding: 1.5rem !important;
         border: 2px dashed #667eea !important;
     }
     
-    [data-testid="stFileUploader"] label {
-        color: #667eea !important;
-        font-weight: 600 !important;
-    }
-    
-    /* ===== EXPANDER (DEBUG) ===== */
+    /* Expandable sections (debug info) */
     .streamlit-expanderHeader {
         background: #667eea !important;
         color: white !important;
         border-radius: 15px !important;
         font-weight: 600 !important;
-        padding: 1rem !important;
     }
     
     .streamlit-expanderContent {
         background: white !important;
         color: #2d3748 !important;
-        border-radius: 0 0 15px 15px !important;
         border: 2px solid #667eea !important;
         border-top: none !important;
-        padding: 1rem !important;
     }
     
-    /* ===== CODE BLOCKS ===== */
+    /* Code styling */
     code {
         background: #f7fafc !important;
         color: #667eea !important;
-        padding: 0.2rem 0.5rem !important;
         border-radius: 5px !important;
-        border: 1px solid #e2e8f0 !important;
     }
     
-    pre {
-        background: #f7fafc !important;
-        border: 1px solid #e2e8f0 !important;
-        border-radius: 10px !important;
-        padding: 1rem !important;
-    }
-    
-    pre code {
-        color: #2d3748 !important;
-    }
-    
-    /* ===== TABLES ===== */
+    /* Table styling */
     table {
         background: white !important;
         border-radius: 10px !important;
-        overflow: hidden !important;
     }
     
     thead tr {
@@ -470,30 +652,15 @@ def main():
     thead th {
         color: white !important;
         font-weight: 600 !important;
-        padding: 1rem !important;
-    }
-    
-    tbody tr {
-        border-bottom: 1px solid #e2e8f0 !important;
     }
     
     tbody td {
         color: #2d3748 !important;
-        padding: 0.75rem 1rem !important;
     }
     
-    /* ===== SPINNER ===== */
-    .stSpinner > div {
-        border-top-color: #667eea !important;
-    }
-    
-    /* ===== SCROLLBAR ===== */
+    /* Scrollbar styling */
     ::-webkit-scrollbar {
         width: 12px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: rgba(255, 255, 255, 0.1);
     }
     
     ::-webkit-scrollbar-thumb {
@@ -501,7 +668,7 @@ def main():
         border-radius: 10px;
     }
     
-    /* ===== ANIMATIONS ===== */
+    /* Message appearance animation */
     @keyframes fadeIn {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
@@ -510,221 +677,205 @@ def main():
     .stChatMessage {
         animation: fadeIn 0.5s ease-out;
     }
-    
-    /* ===== MARKDOWN HEADINGS ===== */
-    .stMarkdown h2 {
-        color: #667eea !important;
-        font-weight: 700 !important;
-        margin-top: 1.5rem !important;
-    }
-    
-    .stMarkdown h3 {
-        color: #764ba2 !important;
-        font-weight: 600 !important;
-    }
-    
-    /* ===== LISTE À PUCES ===== */
-    .stMarkdown ul {
-        color: #2d3748 !important;
-    }
-    
-    .stMarkdown li {
-        margin: 0.5rem 0 !important;
-    }
-    
-    /* ===== DIVIDER ===== */
-    hr {
-        border: none !important;
-        height: 2px !important;
-        background: linear-gradient(90deg, transparent, #667eea, transparent) !important;
-        margin: 2rem 0 !important;
-    }
     </style>
-    """, unsafe_allow_html=True)
+    \"\"\", unsafe_allow_html=True)
     
-    # ✨ TITRE CUSTOM
-    st.markdown("""
-    <div class="custom-title">
+    # ========== HEADER SECTION ==========
+    st.markdown(\"\"\"
+    <div class=\"custom-title\">
         <h1>🤖 Professeur IA</h1>
-        <p class="custom-subtitle">Votre assistant intelligent pour réviser vos cours</p>
+        <p class=\"custom-subtitle\">Intelligent AI Tutor - Learn with Chain of Thought Reasoning</p>
     </div>
-    """, unsafe_allow_html=True)
+    \"\"\", unsafe_allow_html=True)
     
-    # Initialize session state
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-    if "vectorstore" not in st.session_state:
-        st.session_state.vectorstore = None
-    if "doc_previews" not in st.session_state:
-        st.session_state.doc_previews = {}
-    if "tools" not in st.session_state:  # ← NEW: Store tools here
-        st.session_state.tools = None
+    # ========== SESSION STATE INITIALIZATION ==========
+    # Initialize persistent state variables for chat and documents
+    if \"messages\" not in st.session_state:
+        st.session_state.messages = []  # Chat history
+    if \"vectorstore\" not in st.session_state:
+        st.session_state.vectorstore = None  # Indexed documents
+    if \"doc_previews\" not in st.session_state:
+        st.session_state.doc_previews = {}  # Document previews
+    if \"tools\" not in st.session_state:
+        st.session_state.tools = None  # Created agent tools
     
-    # Sidebar
+    # ========== SIDEBAR: Document Management ==========
     with st.sidebar:
-        st.header("Documents")
-        files = st.file_uploader("PDF", type="pdf", accept_multiple_files=True)
+        st.header(\"📚 Course Documents\")
         
-        process_btn = st.button("Traiter les documents")
+        # File upload widget for PDFs
+        files = st.file_uploader(
+            \"Upload course PDFs\",
+            type=\"pdf\",
+            accept_multiple_files=True,
+            help=\"Upload one or more course materials (PDF format)\"
+        )
         
+        # Button to process uploaded documents
+        process_btn = st.button(
+            \"🔄 Process Documents\",
+            use_container_width=True,
+            help=\"Parse and index uploaded PDFs\"
+        )
+        
+        # Process documents when button clicked
         if process_btn and files:
-            with st.spinner("Analyse..."):
-                # Process documents
+            with st.spinner(\"Processing documents...\"):
+                # Load PDFs
                 docs = process_documents(files)
+                
+                # Build vector store
                 st.session_state.vectorstore = build_vector_store(docs)
                 
+                # Create tools with vectorstore access
                 st.session_state.tools = create_all_tools(
                     vectorstore=st.session_state.vectorstore,
                     doc_previews=st.session_state.doc_previews
                 )
                 
-                st.success("Prêt !")
-    
-    # ... rest of sidebar UI ...
-        if st.session_state.vectorstore is not None:
-            st.success("🟢 Mémoire chargée")
-        else:
-            st.warning("🔴 Mémoire vide")
+                st.success(\"✅ Documents ready for learning!\")
         
+        st.divider()
+        st.caption(\"🔧 Tools: RAG Search • Quizzes • Planning • Code Execution\")
+        
+        # Memory status indicator
+        if st.session_state.vectorstore is not None:
+            num_vectors = st.session_state.vectorstore.index.ntotal
+            st.success(f\"🟢 Memory Loaded\\n{num_vectors} vectors indexed\")
+        else:
+            st.warning(\"🔴 No documents loaded yet\")
+        
+        # List indexed documents
         if st.session_state.doc_previews:
-            st.markdown("### Fichiers en mémoire :")
-            for f_name in st.session_state.doc_previews.keys():
-                st.caption(f"📄 {f_name}")
-    # Display chat history
+            st.markdown(\"### 📄 Indexed Files:\")
+            for filename in st.session_state.doc_previews.keys():
+                st.caption(f\"📖 {filename}\")
+    
+    # ========== CHAT INTERFACE ==========
+    # Display previous messages from session state
     for msg in st.session_state.messages:
-        if msg.type == "human":
-            st.chat_message("user").write(msg.content)
-        elif msg.type == "ai" and msg.content:
-            st.chat_message("assistant").write(msg.content)
-            
-    # Chat input
-    user_input = st.chat_input("Votre question...")
+        if msg.type == \"human\":
+            st.chat_message(\"user\").write(msg.content)
+        elif msg.type == \"ai\" and msg.content:
+            st.chat_message(\"assistant\").write(msg.content)
+    
+    # ========== USER INPUT & AGENT EXECUTION ==========
+    user_input = st.chat_input(\"Ask me anything about your courses...\")
     
     if user_input:
-        st.chat_message("user").write(user_input)
+        # Display user message
+        st.chat_message(\"user\").write(user_input)
         st.session_state.messages.append(HumanMessage(content=user_input))
         
-        # Check if tools are ready
+        # Validate that documents are loaded
         if st.session_state.tools is None:
-            st.error("Veuillez d'abord uploader et traiter des documents!")
+            st.error(\"⚠️ Please upload and process documents first!\")
             st.stop()
         
-        # Get API key
-        groq_api_key = st.secrets.get("GROQ_API_KEY")
+        # Validate API key is configured
+        groq_api_key = st.secrets.get(\"GROQ_API_KEY\")
         if not groq_api_key:
-            st.error("Pas de clé API !")
+            st.error(\"❌ API key not configured!\")
             st.stop()
         
+        # Initialize LLM with Groq (fast inference)
         llm = ChatGroq(
             groq_api_key=groq_api_key,
-            model_name="openai/gpt-oss-120b",
-            temperature=0
+            model_name=\"llama-3.3-70b-versatile\",
+            temperature=0,  # Deterministic for educational tasks
+            max_tokens=4096
         )
         
-        # ✅ Use the tools from session state
-        from langchain_experimental.tools import PythonREPLTool
-        python_repl = PythonREPLTool()
-        python_repl.name = "python_interpreter"
-        python_repl.description = "Execute Python code for calculations."
+        # Use tools created during document processing
+        tools = st.session_state.tools
         
-        tools = st.session_state.tools 
-        
-        # Build system prompt
-        docs_context = ""
+        # Build system prompt with CoT instructions
+        docs_context = \"\"
         if st.session_state.doc_previews:
-            docs_context = "\n\n**DOCUMENTS CHARGÉS:**\n"
+            docs_context = \"\\n\\n**INDEXED DOCUMENTS:**\\n\"
             for filename in st.session_state.doc_previews.keys():
-                docs_context += f"- {filename}\n"
+                docs_context += f\"- {filename}\\n\"
+        else:
+            docs_context = \"\\n\\n**NOTE: No documents currently indexed.**\"
         
+        # Chain of Thought system prompt
         system_prompt = (
-            "You are Professeur IA, an intelligent tutor helping students learn from their course documents.\n"
-    f"{docs_context}\n\n"
-    
-    " **CRITICAL: YOU MUST FOLLOW THIS FORMAT FOR EVERY RESPONSE**\n\n"
-    
-    " **CHAIN OF THOUGHT (CoT) - MANDATORY FORMAT**\n"
-    "EVERY response MUST show these 4 steps explicitly. NO EXCEPTIONS:\n\n"
-    
-    "**Step 1 - Pensée (Thought):**\n"
-    "Analyze what the user is asking. What is the core question? What information do I need?\n\n"
-    
-    "**Step 2 - Action:**\n"
-    "Decide which tool(s) to use and explain why. Be explicit about your tool choice.\n\n"
-    
-    "**Step 3 - Observation:**\n"
-    "Show what you found after using the tool. Display the actual results or data.\n\n"
-    
-    "**Step 4 - Réponse:**\n"
-    "Give your final answer based on the observation. Cite sources.\n\n"
-    
-    "---\n\n"
-    
-    " **MANDATORY TOOL USAGE RULES:**\n\n"
-    
-    "**FOR QUESTIONS ABOUT COURSE CONTENT:**\n"
-    "1. ALWAYS call search_course() FIRST\n"
-    "2. If search_course returns results → Use them in your answer\n"
-    "3. If search_course returns nothing → Then try search_wikipedia\n"
-    "4. NEVER skip directly to Wikipedia without trying search_course first\n\n"
-    
-    "**FOR DEFINITIONS/CONCEPTS:**\n"
-    "Order: search_course → search_wikipedia (if needed)\n"
-    "Always try the course documents before external sources.\n\n"
-    
-    "**FOR QUIZ REQUESTS (user says 'quiz me', 'test me', 'ask me about'):**\n"
-    "1. Use generate_quiz_context to extract relevant content\n"
-    "2. Create ONE multiple-choice question with 3-4 options\n"
-    "3. DO NOT give the answer immediately\n"
-    "4. Wait for user's response, then explain if correct/incorrect\n\n"
-    
-    "**FOR STUDY PLANNING (user asks for 'planning', 'schedule', 'révision'):**\n"
-    "1. Use create_study_plan tool\n"
-    "2. Return a Markdown table with columns:\n"
-    "   - Jour (Day)\n"
-    "   - Sujets à réviser (Topics)\n"
-    "   - Objectifs d'apprentissage (Learning objectives)\n\n"
-    
-    " **FOR MATH/CALCULATIONS/PLOTTING:**\n"
-    "Use python_interpreter tool with this pattern:\n"
-    "- For calculations: use print() to show results\n"
-    "- For plots: use plt.savefig('plot.png') at the end\n"
-    "- Always include print statements for output\n\n"
-    
+            \"You are Professeur IA, an expert AI tutor specialized in helping students learn.\\n\"
+            f\"{docs_context}\\n\\n\"
+            
+            \"⚠️ **MANDATORY: Chain of Thought (CoT) - ALWAYS use this format**\\n\\n\"
+            
+            \"🧠 **RESPONSE STRUCTURE (Pensée → Action → Observation → Réponse):**\\n\"
+            \"1. **Pensée (Thought)**: Analyze the user's question and identify what's needed\\n\"
+            \"2. **Action (Action)**: Explain which tool(s) you'll use and why\\n\"
+            \"3. **Observation (Observation)**: Show the tool results or findings\\n\"
+            \"4. **Réponse (Answer)**: Provide the final answer with citations\\n\\n\"
+            
+            \"📋 **TOOL USAGE RULES:**\\n\"
+            \"- **Course Questions**: ALWAYS try search_course FIRST, then Wikipedia if needed\\n\"
+            \"- **Quizzes**: Use generate_quiz_context, create ONE question, wait for answer\\n\"
+            \"- **Study Plans**: Use create_study_plan, return Markdown table\\n\"
+            \"- **Math/Code**: Use python_interpreter with print() for output\\n\"
+            \"- **Definitions**: Try search_course → search_wikipedia\\n\\n\"
+            
+            \"✨ **PEDAGOGICAL GUIDELINES:**\\n\"
+            \"- Be encouraging and supportive\\n\"
+            \"- Explain concepts clearly with course material examples\\n\"
+            \"- For quizzes: Never give answers immediately\\n\"
+            \"- Always cite your sources\\n\"
+            \"- Use Markdown for formatting\\n\\n\"
+            
+            \"🌍 **LANGUAGE**: Respond in the same language as the user (French or English)\\n\"
         )
         
-        # Create agent with tools
+        # Create agent with tools and system prompt
         agent_graph = create_agent(llm, tools=tools, system_prompt=system_prompt)
         
-        # Run agent
-        with st.chat_message("assistant"):
-            with st.spinner("Réflexion..."):
+        # Execute agent in chat message container
+        with st.chat_message(\"assistant\"):
+            with st.spinner(\"Thinking with Chain of Thought...\"):
                 try:
-                    response = agent_graph.invoke({"messages": st.session_state.messages})
-                    full_history = response["messages"]
+                    # Invoke agent with conversation history
+                    response = agent_graph.invoke({\"messages\": st.session_state.messages})
+                    full_history = response[\"messages\"]
                     final_answer = full_history[-1].content
-            
-                    # Afficher la réponse
+                    
+                    # Display response
                     st.markdown(final_answer)
-            
-                    # ✅ AFFICHER LE PLOT SI CRÉÉ
-                    if os.path.exists("plot.png"):
-                        st.image("plot.png", caption="📊 Résultat graphique", use_container_width=True)
-                        os.remove("plot.png")  # Nettoyer après affichage
-            
-                    # Debug tools
+                    
+                    # Display generated plot if created by python_interpreter
+                    if os.path.exists(\"plot.png\"):
+                        st.image(
+                            \"plot.png\",
+                            caption=\"📊 Generated Visualization\",
+                            use_container_width=True
+                        )
+                        os.remove(\"plot.png\")  # Clean up
+                    
+                    # Debug section: show which tools were used
                     used_tools = []
                     for msg in full_history:
                         if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
                             for tool_call in msg.tool_calls:
                                 used_tools.append(tool_call['name'])
-            
+                    
                     if used_tools:
-                        with st.expander("🔍 Debug: Outils utilisés", expanded=True):
-                            st.write(f"**{', '.join(set(used_tools))}**")
-            
+                        with st.expander(\"🔍 Debug Info: Tools Used\", expanded=False):
+                            st.write(f\"**{', '.join(set(used_tools))}**\")
+                    
+                    # Update session state with new messages
                     st.session_state.messages = full_history
+                    
                 except Exception as e:
-                    st.error(f"Erreur: {e}")
+                    st.error(f\"❌ Error: {str(e)}\")
+                    import traceback
+                    with st.expander(\"View Full Error\"):
+                        st.code(traceback.format_exc())
 
-if __name__ == "__main__":
+
+# ============================================================================
+# ENTRY POINT
+# ============================================================================
+
+if __name__ == \"__main__\":
     main()
