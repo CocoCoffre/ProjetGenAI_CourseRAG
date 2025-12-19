@@ -416,24 +416,24 @@ def main():
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     }
     
-    /* SIDEBAR - ALWAYS VISIBLE WITH PROPER STYLING */
+    /* SIDEBAR - FULLY VISIBLE AND ACCESSIBLE */
     [data-testid="stSidebar"] {
         background: white !important;
         border-right: 3px solid #667eea !important;
         box-shadow: 4px 0 15px rgba(0,0,0,0.1) !important;
-        visibility: visible !important;
-        z-index: 999 !important;
-        position: relative !important;
     }
     
-    /* Ensure sidebar items are visible */
-    [data-testid="stSidebar"] [class*="element-container"] {
+    /* Ensure all sidebar content is visible */
+    [data-testid="stSidebar"] > * {
         visibility: visible !important;
+        opacity: 1 !important;
+        display: block !important;
     }
     
     [data-testid="stSidebar"] * {
-        color: #2d3748 !important;
         visibility: visible !important;
+        opacity: 1 !important;
+        color: #2d3748 !important;
     }
     
     [data-testid="stSidebar"] h1, 
@@ -444,19 +444,38 @@ def main():
         visibility: visible !important;
     }
     
-    /* SIDEBAR BUTTON/TOGGLE - MAXIMUM VISIBILITY */
+    /* FILE UPLOADER - FULLY VISIBLE */
+    [data-testid="stFileUploader"] {
+        background: #f8f9ff !important;
+        border-radius: 15px !important;
+        border: 2px dashed #667eea !important;
+        padding: 1.5rem !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    [data-testid="stFileUploader"] * {
+        color: #2d3748 !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+    
+    [data-testid="stFileUploadDropzone"] {
+        background: linear-gradient(135deg, #f8f9ff 0%, #e8eaf8 100%) !important;
+        border: 2px dashed #667eea !important;
+        border-radius: 12px !important;
+        visibility: visible !important;
+    }
+    
+    /* SIDEBAR TOGGLE BUTTON - ALWAYS VISIBLE */
     button[kind="header"] {
         background-color: #667eea !important;
         color: white !important;
         border: none !important;
         border-radius: 8px !important;
         padding: 8px 12px !important;
-        width: auto !important;
         visibility: visible !important;
         z-index: 1000 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
         cursor: pointer !important;
         transition: all 0.3s ease !important;
     }
@@ -583,24 +602,6 @@ def main():
     .stButton > button:hover {
         transform: translateY(-3px) !important;
         box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6) !important;
-    }
-    
-    /* FILE UPLOADER STYLING - LIGHT AND CLEAR */
-    [data-testid="stFileUploader"] {
-        background: #f8f9ff !important;
-        border-radius: 15px !important;
-        border: 2px dashed #667eea !important;
-        padding: 1.5rem !important;
-    }
-    
-    [data-testid="stFileUploader"] * {
-        color: #2d3748 !important;
-    }
-    
-    [data-testid="stFileUploader"] div[data-testid="stFileUploadDropzone"] {
-        background: linear-gradient(135deg, #f8f9ff 0%, #e8eaf8 100%) !important;
-        border: 2px dashed #667eea !important;
-        border-radius: 12px !important;
     }
     
     /* Expandable sections (debug info) */
